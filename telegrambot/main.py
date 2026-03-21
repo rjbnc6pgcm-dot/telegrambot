@@ -45,7 +45,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Error calling OpenAI: {e}")
         await update.message.reply_text("哎呀，我的大腦斷線了，請稍後再試！")
 
-def main():
+async def main():
     """啟動機器人"""
     if not BOT_TOKEN or not OPENAI_API_KEY:
         print("錯誤：請設定環境變數 BOT_TOKEN 和 OPENAI_API_KEY")
@@ -58,7 +58,10 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), reply))
 
     print("機器人運行中...")
-    app.run_polling()
+    async with app:
+        await app.start()
+        await app.updater.start_polling()
+        await asyncio.Event().wait()  # Keep running
 
 if __name__ == "__main__":
     main()
