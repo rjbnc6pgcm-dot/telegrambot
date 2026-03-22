@@ -163,7 +163,7 @@ async def main():
     print("🚀 小絢已就緒！每小時會主動找叶ちゃん聊天喔！", flush=True)
     await asyncio.Event().wait()
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
