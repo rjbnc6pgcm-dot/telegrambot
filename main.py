@@ -19,7 +19,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # 使用新版 SDK 的 generate 語法
         response = client.models.generate_content(
-            model="models/gemini-1.5-flash", 
+            model="gemini-2.0-flash", 
             contents=user_text
         )
         bot_reply = response.text
