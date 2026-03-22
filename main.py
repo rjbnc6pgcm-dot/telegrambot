@@ -175,7 +175,9 @@ async def main():
     # 啟動服務
     await app.initialize()
     await app.start()
-    await app.updater.start_polling(drop_pending_updates=True)
+    await app.updater.start_polling(drop_pending_updates=True) 
+    
+    print("🚀 小絢已就緒！", flush=True)
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
