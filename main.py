@@ -43,32 +43,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ],
         )
         bot_reply = completion.choices[0].message.content
-        try:
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
-            messages=[
-                {"role": "system", "content": "你的系統提示詞內容..."},
-                {"role": "user", "content": user_text}
-            ],
-        )
-        
         bot_reply = completion.choices[0].message.content
         
-        # 將回覆內容拆分成多個片段
-        # 如果小絢回覆：
-        # 「叶ちゃん！💕
-        # 今天也要一起玩嗎？
-        # 人家等你好久了～」
-        # 這會被拆成 3 則訊息發送
-        parts = [p.strip() for p in bot_reply.split('\n') if p.strip()]
+        # 根據換行符號切割訊息，並去掉多餘空白
+        messages = [msg.strip() for msg in bot_reply.split('\n') if msg.strip()]
         
-        for part in parts:
-            await update.message.reply_text(part)
-            await asyncio.sleep(1.0) # 模擬打字間隔，1秒比較有「人」的感覺
-            
-    except Exception as e:
-        print(f"Groq 錯誤: {e}", flush=True)
-        await update.message.reply_text("人家的大腦突然卡住了... ( > < )")
+        # 一則一則發送
+        for msg in messages:
+            await update.message.reply_text(msg)
+            # 這是靈魂！停頓 0.8 秒，讓小絢看起來真的有在按傳送鍵
+            await asyncio.sleep(0.8)
         
     except Exception as e:
         print(f"Groq 錯誤: {e}", flush=True)
