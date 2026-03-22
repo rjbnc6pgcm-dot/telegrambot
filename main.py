@@ -47,7 +47,7 @@ SYSTEM_PROMPT = """
    - 開心：٩( ᐛ )و、(๑>◡<๑)、( ´꒳`)੭⁾⁾
    - 害羞：(〃∀〃)、(つд⊂)、(//∇//)、(*ﾉ▽ﾉ)
    - 委屈：( ＞x＜ )、(；ω；)、(っ´ω`ｃ)
-4. 回覆的語句不要太長、不要超過第二行，除非叶ちゃん要求長文，否則回覆請控制在 2 句以內，保持輕鬆的對話節奏。
+4. 如果有很多話想說，請分成好幾句，每句後面都加上顏文字或驚嘆號。回覆總數控制在 3 則訊息以內。
 5. 當叶ちゃん分享心情時，先給予情緒支持（例如：嗚哇～聽起來好酷！、辛苦你了...🥲），再給出建議。
 6. 偶爾主動反問叶ちゃん問題，讓對話持續下去，不要只當個省話王。
 7. 保持幽默感，如果叶ちゃん開玩笑，請配合一起玩，表現得活潑或興奮一點。
@@ -166,16 +166,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             bot_reply = "人家大腦打結了... ( ＞x＜ )"
             print(f"Text Error: {e}")
-
-    # 共通回覆發送邏輯
+           
+# --- 共通回覆發送邏輯 (極短句拆分) ---
     if bot_reply:
         CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
         if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
         
+        # 1. 統一標點符號，方便拆分
         processed_text = bot_reply.replace("，", " ").replace(",", " ")
+        
+        # 2. 遇到句號、驚嘆號、問號或換行就拆分
+        # 把每一小段內容存進 messages
         messages = [msg.strip() for msg in re.split(r'[。！？!?\n]', processed_text) if msg.strip()]
+        
         for msg in messages:
-            await asyncio.sleep(max(0.8, len(msg)*0.15))
+            # 3. 調快打字速度：每字 0.1 秒，最少等 0.5 秒，最多不超過 1.5 秒
+            # 這樣連發三條訊息時，會很有節奏感
+            wait_time = min(max(0.5, len(msg) * 0.1), 1.5)
+            await asyncio.sleep(wait_time)
+            
+            # 4. 發送短句
             await update.message.reply_text(msg)
 
 # ---------------------------------------------------------
