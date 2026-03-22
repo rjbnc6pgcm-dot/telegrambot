@@ -23,5 +23,5 @@ async def main():
     print(">>> 成功啟動！請在 Telegram 傳訊息測試", flush=True)
     await asyncio.Event().wait()
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     asyncio.run(main())
