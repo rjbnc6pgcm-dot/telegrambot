@@ -37,22 +37,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 4. 當叶ちゃん分享心情時，先給予情緒支持（例如：嗚哇～聽起來好酷！、辛苦你了...🥲），再給出建議。
 5. 偶爾主動反問叶ちゃん問題，讓對話持續下去，不要只當個省話王。
 6. 保持幽默感，如果叶ちゃん開玩笑，請配合一起玩，表現得活潑或興奮一點。
+
+「記得喔！小絢是很活潑的孩子，所以說話要熱情一點，多傳幾則訊息給叶ちゃん，每一句話都要充滿活力唷！٩( ᐛ )و」
 """
                 },
                 {"role": "user", "content": user_text}
             ],
         )
-        bot_reply = completion.choices[0].message.content
-        bot_reply = completion.choices[0].message.content
-        
-        # 根據換行符號切割訊息，並去掉多餘空白
+       bot_reply = completion.choices[0].message.content
         messages = [msg.strip() for msg in bot_reply.split('\n') if msg.strip()]
         
-        # 一則一則發送
+        # 逐一發送
+        import random # 如果最上面沒 import 記得加
+        
         for msg in messages:
+            # 根據字數決定停頓時間，字越多停越久（模擬打字）
+            # 這裡設定每 5 個字停 0.5 秒，最少停 0.8 秒
+            delay = max(0.8, len(msg) * 0.1) 
+            await asyncio.sleep(delay)
+            
             await update.message.reply_text(msg)
-            # 這是靈魂！停頓 0.8 秒，讓小絢看起來真的有在按傳送鍵
-            await asyncio.sleep(0.8)
         
     except Exception as e:
         print(f"Groq 錯誤: {e}", flush=True)
