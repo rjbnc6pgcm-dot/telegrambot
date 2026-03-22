@@ -5,6 +5,15 @@ from groq import Groq  # 換成 Groq 庫
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
+LAST_CHAT_ID = None
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global LAST_CHAT_ID
+    # 只要妳傳訊息，他就記住妳的 ID
+    LAST_CHAT_ID = update.effective_chat.id
+    
+    # ... 妳原本處理訊息的內容 (completion.choices[0].message.content 等等) ...
+
 # 設定日誌
 logging.basicConfig(level=logging.INFO)
 
@@ -13,6 +22,9 @@ GROQ_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global LAST_CHAT_ID
+    LAST_CHAT_ID = update.effective_chat.id
+
     user_text = update.message.text
     # 這裡可以保留 Print Log 方便妳在 Railway 觀察小絢有沒有抓到訊息
     print(f"叶ちゃん 傳來了訊息: {user_text}", flush=True)
@@ -46,26 +58,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         bot_reply = completion.choices[0].message.content
         
-        # 1. 先處理全形和半形的逗號，把它們換成空格
-        processed_text = bot_reply.replace("，", " ").replace(",", " ")
-        
-        # 2. 根據「句號」來切割訊息（包含全形和半形句號）
-        # 我們先統一換成一個特殊符號再切，或是用正則表達式
         import re
-        # 把 。 ! ? 這些結束標點都當作「分則訊息」的依據
-        raw_messages = re.split(r'[。！？!?\n]', processed_text)
-        
-        # 3. 過濾掉空字串，並去掉前後空格
-        messages = [msg.strip() for msg in raw_messages if msg.strip()]
+        processed_text = bot_reply.replace("，", " ").replace(",", " ")
+        # 根據句號、驚嘆號、問號或換行切割
+        messages = [msg.strip() for msg in re.split(r'[。！？!?\n]', processed_text) if msg.strip()]
         
         # 逐一發送
         import random 
         for msg in messages:
-            # 模擬打字時間
+            # 模擬打字時間，字越多停越久
             delay = max(0.8, len(msg) * 0.2) 
             await asyncio.sleep(delay)
             await update.message.reply_text(msg)
-        
+            
     except Exception as e:
         print(f"Groq 錯誤: {e}", flush=True)
         await update.message.reply_text("嗚...叶ちゃん...人家的大腦突然轉不過來了... ( ＞x＜ )")
@@ -78,6 +83,13 @@ async def main():
         return
 
     app = ApplicationBuilder().token(TOKEN).build()
+
+    app.job_queue.run_repeating(send_active_ai_message, interval=3600, first=10)
+    
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+    
+    # ... 啟動啟動 ...
+
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     
     print("🚀 Groq AI 機器人已就緒！速度極快，請測試。", flush=True)
@@ -89,3 +101,19 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+async def main():
+    TOKEN = os.getenv("BOT_TOKEN")
+    # ... 檢查 TOKEN ...
+
+    # 建立 Application
+    app = ApplicationBuilder().token(TOKEN).build()
+    
+    # --- 註冊主動說話的鬧鐘 ---
+    # interval=3600 (每小時一次), first=10 (啟動10秒後先傳一次)
+    app.job_queue.run_repeating(send_active_ai_message, interval=3600, first=10)
+    # -----------------------
+
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+    
+    # ... 啟動 ...
