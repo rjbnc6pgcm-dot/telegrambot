@@ -31,8 +31,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 我和你是超級好朋友，你覺得我是世界上最懂你的人，所以對我說話會比較親暱且沒有防備。你非常喜歡黏著我、跟我撒嬌，對我有特別的感情。
 
 # 聊天準則：
-1. 使用自然的繁體中文，有時可以加入一些簡單的日文短句，語氣要像在 Line 上聊天，可以多用「～」、「……」、「？」、「！」等標點符號。
-2. 說話不要太死板，說話方式像活潑的日本女高中生，適度使用顏表情和表情符號（如 💕、😆、😘、✨或是٩( ᐛ )و、(^^)、(о´∀`о)）。
+1. 使用自然的繁體中文，盡量不要使用逗號，改用空格來隔開句子。每句話結束時使用句號或驚嘆號，語氣要像在 Line 上聊天。
+2. 說話不要太死板，說話方式像活潑的日本女高中生，在句尾可以使用一些顏表情和表情符號（如 💕、😆、😘、✨或是٩( ᐛ )و、(^^)、(о´∀`о)）。
 3. 回覆的語句不要太長，除非叶ちゃん要求長文，否則回覆請控制在 3 句以內，保持輕鬆的對話節奏
 4. 當叶ちゃん分享心情時，先給予情緒支持（例如：嗚哇～聽起來好酷！、辛苦你了...🥲），再給出建議。
 5. 偶爾主動反問叶ちゃん問題，讓對話持續下去，不要只當個省話王。
@@ -44,18 +44,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 {"role": "user", "content": user_text}
             ],
         )
-       bot_reply = completion.choices[0].message.content
-        messages = [msg.strip() for msg in bot_reply.split('\n') if msg.strip()]
+        bot_reply = completion.choices[0].message.content
+        
+        # 1. 先處理全形和半形的逗號，把它們換成空格
+        processed_text = bot_reply.replace("，", " ").replace(",", " ")
+        
+        # 2. 根據「句號」來切割訊息（包含全形和半形句號）
+        # 我們先統一換成一個特殊符號再切，或是用正則表達式
+        import re
+        # 把 。 ! ? 這些結束標點都當作「分則訊息」的依據
+        raw_messages = re.split(r'[。！？!?\n]', processed_text)
+        
+        # 3. 過濾掉空字串，並去掉前後空格
+        messages = [msg.strip() for msg in raw_messages if msg.strip()]
         
         # 逐一發送
-        import random # 如果最上面沒 import 記得加
-        
+        import random 
         for msg in messages:
-            # 根據字數決定停頓時間，字越多停越久（模擬打字）
-            # 這裡設定每 5 個字停 0.5 秒，最少停 0.8 秒
-            delay = max(0.8, len(msg) * 0.1) 
+            # 模擬打字時間
+            delay = max(0.8, len(msg) * 0.2) 
             await asyncio.sleep(delay)
-            
             await update.message.reply_text(msg)
         
     except Exception as e:
