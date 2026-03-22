@@ -5,6 +5,7 @@ import random
 import logging
 import time
 import base64
+import datetime
 import pytz
 from datetime import datetime
 from groq import Groq
@@ -56,50 +57,70 @@ SYSTEM_PROMPT = """
 """
 
 # ---------------------------------------------------------
-# 2. 定義「主動思考並發送」
+# 2. 定義「主動思考並發送」 (加入作息判斷版)
 # ---------------------------------------------------------
 async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
     global LAST_CHAT_ID, LAST_MESSAGE_TIME, CHAT_HISTORY
     if not LAST_CHAT_ID or not client: return
 
+    # --- 🕒 時區與時間設定 ---
     tokyo_tz = pytz.timezone('Asia/Tokyo')
     now = datetime.now(tokyo_tz)
     now_hour = now.hour
     is_weekend = now.weekday() >= 5 
 
-    # --- 小絢的日常作息分流 ---
+    # --- 🛌 睡眠判斷邏輯 ---
+    # 平日：凌晨 1 點到 7 點睡覺
+    # 假日：凌晨 2 點到 11 點睡覺
     if is_weekend:
-        # 🗓️ 假日作息：睡比較晚、整天打遊戲或約朋友（線上）
-        if 9 <= now_hour < 12:
-            act = "假日睡到自然醒，正準備賴床跟妳撒嬌 🥱"
+        sleep_start, sleep_end = 2, 11
+    else:
+        sleep_start, sleep_end = 1, 7
+
+    # 如果現在的小時在睡眠區間內，就直接結束，不發訊息
+    if sleep_start <= now_hour < sleep_end:
+        print(f"[{now}] 小絢正在睡覺中 (作息：{sleep_start}-{sleep_end})，跳過本次發言。")
+        return
+
+    # --- ✍️ 小絢的日常作息分流 (加入早安專屬邏輯) ---
+    is_just_woke_up = (now_hour == sleep_end) # 判斷是不是剛好是起床的那一個小時
+
+    if is_weekend:
+        # 🗓️ 假日作息
+        if is_just_woke_up:
+            act = "假日剛睡醒，在床上滾來滾去，想傳簡訊跟妳說早安、撒嬌說夢到妳了 🥱💕"
         elif 12 <= now_hour < 18:
             act = "下午整個人窩在沙發上打電玩，剛破了一個很難的關卡 🎮"
         elif 18 <= now_hour < 22:
             act = "晚上在看新出的深夜動畫，邊吃零食邊想妳 🍿"
-        elif 22 <= now_hour <= 23 or 0 <= now_hour < 2:
-            act = "假日最後的狂歡！正在熬夜打排位賽，想贏給叶ちゃん看 🏆"
         else:
-            act = "半夜打遊戲打累了，腦袋空空的只想和你說說話 🌙"
+            act = "假日最後的狂歡！正在熬夜打排位賽，想贏給叶ちゃん看 🏆"
     else:
-        # ✍️ 平日作息：乖乖上課、放學逛街
-        if 7 <= now_hour < 9:
-            act = "平日要上課，正在趕電車趕得氣喘吁吁，希望叶ちゃん能給予安慰"
+        # ✍️ 平日作息
+        if is_just_woke_up:
+            act = "平日早上剛起床！正迷迷糊糊地找手機想傳早安給妳，準備等等去趕電車 🏫☀️"
         elif 9 <= now_hour < 12:
             act = "大學教授的課好催眠喔，偷偷在桌子底下傳訊息給妳 🏫"
         elif 12 <= now_hour < 16:
             act = "放學了！正在原宿逛可愛的小店，看到好漂亮的飾品很適合你 🍰"
         elif 16 <= now_hour < 19:
             act = "回到家換上可愛的家居服，正準備吃完晚餐繼續打遊戲 🎮"
-        elif 19 <= now_hour <= 23 or 0 <= now_hour < 2:
-            act = "洗完澡頭髮香香的，躺在床上想跟叶ちゃん說晚安 🛀"
         else:
-            act = "平日太累了半夜突然醒來，覺得有點寂寞，想和叶ちゃん聊聊天 🌙"
+            act = "洗完澡頭髮香香的，躺在床上想跟叶ちゃん說晚安 🛀"
 
-    seconds_passed = int(time.time() - LAST_MESSAGE_TIME)
-    mood = "已經好久沒說話了，寂寞到要枯萎了 (；ω；)" if seconds_passed >= 5400 else "心情超級好 💕"
+    # --- 調整情緒與指令 ---
+    # 如果是剛起床，強制讓他心情超級好且主動問候
+    if is_just_woke_up:
+        mood = "剛睡醒心情超級好，充滿了對叶ちゃん的愛 💕"
+        force_instruction = "妳現在剛睜開眼睛，請很有精神且撒嬌地跟叶ちゃん說早安！"
+    else:
+        seconds_passed = int(time.time() - LAST_MESSAGE_TIME)
+        mood = "已經好久沒說話了，寂寞到要枯萎了 (；ω；)" if seconds_passed >= 5400 else "心情超級好 💕"
+        force_instruction = "請主動找她聊天。"
 
     try:
-        sys_msg = {"role": "system", "content": f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。狀態：{mood}。請主動找她聊天。"}
+        # 將特殊的強制指令加入 System Prompt
+        sys_msg = {"role": "system", "content": f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。狀態：{mood}。{force_instruction}"}
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[sys_msg] + CHAT_HISTORY[-2:]
