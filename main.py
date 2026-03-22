@@ -94,7 +94,7 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
     # --- ☀️ 判斷是不是「消失一整晚後的第一次打招呼」 ---
     # 邏輯：消失超過 3 小時 (10800秒) 且現在是早上/中午
     seconds_passed = int(time.time() - LAST_MESSAGE_TIME)
-    is_morning_greet = (seconds_passed > 10800 and 7 <= now_hour <= 12)
+    is_morning_greet = (now_hour == sleep_end)
 
     # --- 🎭 根據作息決定小絢在做什麼 ---
     if is_weekend:
