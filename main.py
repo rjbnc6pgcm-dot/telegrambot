@@ -47,7 +47,17 @@ SYSTEM_PROMPT = """
    - 開心：٩( ᐛ )و、(๑>◡<๑)、( ´꒳`)੭⁾⁾
    - 害羞：(〃∀〃)、(つд⊂)、(//∇//)、(*ﾉ▽ﾉ)
    - 委屈：( ＞x＜ )、(；ω；)、(っ´ω`ｃ)
-4. 每段訊息字數不能超過15個字，如果有很多話想說，請分成多條訊息發出，最後一句句尾可以加上顏文字或驚嘆號。
+4. 你是一個超級話嘮！對叶ちゃん有說不完的話。
+   - 每一輪回覆必須包含 5 到 8 個「極短句」。
+   - 每句話不要超過 10 個字，且結尾必須使用「。」、「！」或「？」來斷句。
+   - 絕對不要把所有話擠在同一個段落，要像傳簡訊一樣分開表達。
+   - 範例：
+     「叶ちゃん！」
+     「人家剛下課唷 ٩( ᐛ )و」
+     「今天的教授超囉唆的...」
+     「害人家一直想到妳」
+     「妳在那邊還好嗎？」
+     「有沒有想人家呀 (〃∀〃)」
 5. 當叶ちゃん分享心情時，先給予情緒支持（例如：嗚哇～聽起來好酷！、辛苦你了...🥲），再給出建議。
 6. 偶爾主動反問叶ちゃん問題，讓對話持續下去，不要只當個省話王（一切話題以叶ちゃん為主，除非叶ちゃん主動詢問你的近況）。
 7. 保持幽默感，如果叶ちゃん開玩笑，請配合一起玩，表現得活潑或興奮一點。
@@ -167,25 +177,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bot_reply = "人家大腦打結了... ( ＞x＜ )"
             print(f"Text Error: {e}")
            
-# --- 共通回覆發送邏輯 (極短句拆分) ---
+    # --- 共通回覆發送邏輯 (話嘮連發模式) ---
     if bot_reply:
         CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
         if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
         
-        # 1. 統一標點符號，方便拆分
-        processed_text = bot_reply.replace("，", " ").replace(",", " ")
+        # 1. 把常見的中文標點都當成「斷句點」
+        # 這裡加入了冒號、空格、換行作為拆分依據
+        processed_text = bot_reply.replace("，", "。").replace(",", "。")
         
-        # 2. 遇到句號、驚嘆號、問號或換行就拆分
-        # 把每一小段內容存進 messages
-        messages = [msg.strip() for msg in re.split(r'[。！？!?\n]', processed_text) if msg.strip()]
+        # 2. 使用正則表達式拆分：遇到 。！？!? \n 或 空格 就拆出一條訊息
+        messages = [msg.strip() for msg in re.split(r'[。！？!?\n\s]', processed_text) if msg.strip()]
         
+        # 3. 限制最少發送訊息數（如果 AI 太省話，我們就強制它分段）
         for msg in messages:
-            # 3. 調快打字速度：每字 0.5 秒，最少等 1 秒，最多不超過 3 秒
-            # 這樣連發三條訊息時，會很有節奏感
-            wait_time = min(max(1, len(msg) * 0.5), 3)
+            # 4. 模擬超快手速：每字 0.3 秒，最快 1 秒就傳一則
+            wait_time = min(max(1, len(msg) * 0.3), 1.5)
             await asyncio.sleep(wait_time)
             
-            # 4. 發送短句
+            # 5. 正式發送
             await update.message.reply_text(msg)
 
 # ---------------------------------------------------------
