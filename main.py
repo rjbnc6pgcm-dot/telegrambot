@@ -138,8 +138,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     seconds_since_last = int(time.time() - LAST_MESSAGE_TIME)
 
     # --- ⏳ 隨機回覆延遲邏輯 (模擬真人) ---
-    # 設定隨機秒數：例如 10 秒到 120 秒之間，可以根據妳的喜好調整範圍
-    delay_seconds = random.randint(10, 120) 
+    # 設定隨機秒數：例如 10 秒到 60 秒之間，可以根據妳的喜好調整範圍
+    delay_seconds = random.randint(10, 60) 
     
     # 在等待期間，讓 Telegram 顯示「小絢正在輸入...」
     # 注意：typing 狀態通常只持續 5 秒，所以如果延遲很長，我們可以每隔幾秒發一次
