@@ -177,18 +177,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bot_reply = "人家大腦打結了... ( ＞x＜ )"
             print(f"Text Error: {e}")
            
-    # --- 共通回覆發送邏輯 (話嘮連發模式) ---
+    # --- 共通回覆發送邏輯 (優化版：保留標點符號) ---
     if bot_reply:
         CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
-        if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(
+        if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
         
-        # 3. 限制最少發送訊息數（如果 AI 太省話，我們就強制它分段）
+        # 1. 統一標點，但先不要把逗號換成句號，避免切得太碎
+        processed_text = bot_reply.replace("，", " ").replace(",", " ")
+        
+        # 2. 使用「正則表達式」捕捉標點符號並保留它
+        # 這個正則會找 句號/問號/驚嘆號/換行 之後的位置進行拆分，但保留符號本身
+        messages = [msg.strip() for msg in re.split(r'(?<=[。！？!?\n\s])', processed_text) if msg.strip()]
+        
         for msg in messages:
-            # 4. 模擬超快手速：每字 0.3 秒，最快 1 秒就傳一則
-            wait_time = min(max(1, len(msg) * 0.3), 1.5)
+            # 3. 調整等待時間，讓節奏更自然
+            wait_time = min(max(0.8, len(msg) * 0.15), 2.0)
             await asyncio.sleep(wait_time)
             
-            # 5. 正式發送
+            # 4. 正式發送 (現在 msg 會包含末尾的標點符號了！)
             await update.message.reply_text(msg)
 
 # ---------------------------------------------------------
