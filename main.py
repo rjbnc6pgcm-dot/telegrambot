@@ -41,8 +41,8 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
     else:
         mood = "你現在心情很好，主動跟叶ちゃん分享你現在正在做的小事 (٩( ᐛ )و)。"
 
-    # 日本時間校正 (+5)
-    now_hour = (datetime.now().hour + 5) % 24
+    # 日本時間校正 (+6)
+    now_hour = (datetime.now().hour + 6) % 24
 
     # --- 小絢的日常作息設定 ---
     if 7 <= now_hour < 9:
