@@ -138,6 +138,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     bot_reply = ""
 
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global LAST_CHAT_ID, LAST_MESSAGE_TIME, CHAT_HISTORY
+    LAST_CHAT_ID = update.effective_chat.id
+    LAST_MESSAGE_TIME = time.time()
+    bot_reply = ""
+
+    # --- ✨ 直接把主動發言的那套時間邏輯貼過來 ---
+    tokyo_tz = pytz.timezone('Asia/Tokyo')
+    now = datetime.now(tokyo_tz)
+    now_hour = now.hour
+    is_weekend = now.weekday() >= 5 
+
+    if is_weekend:
+        if 9 <= now_hour < 12: act = "假日睡到自然醒，正準備賴床跟妳撒嬌 🥱"
+        elif 12 <= now_hour < 18: act = "下午整個人窩在沙發上打電玩，剛破了一個很難的關卡 🎮"
+        elif 18 <= now_hour < 22: act = "晚上在看新出的深夜動畫，邊吃零食邊想妳 🍿"
+        else: act = "半夜打遊戲打累了，腦袋空空的只想和你說說話 🌙"
+    else:
+        if 7 <= now_hour < 9: act = "平日要上課，正在趕電車趕得氣喘吁吁 🏫"
+        elif 9 <= now_hour < 12: act = "大學教授的課好催眠喔，偷偷在桌子底下傳訊息給妳 🏫"
+        elif 12 <= now_hour < 16: act = "放學了！正在原宿逛可愛的小店 🍰"
+        elif 16 <= now_hour < 19: act = "回到家換上可愛的家居服，正準備吃完晚餐繼續打遊戲 🎮"
+        else: act = "洗完澡頭髮香香的，躺在床上想跟叶ちゃん說晚安 🛀"
+
+    # 把這個 act 塞進臨時的 System Prompt 裡
+    temp_sys_prompt = f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。"
+    # ------------------------------------------------
+
     # A. 處理照片
     if update.message.photo:
         try:
@@ -149,7 +177,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             completion = client.chat.completions.create(
                 model="llama-3.2-11b-vision-preview",
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT + "\n叶ちゃん傳了照片，請先描述妳看到了什麼並給予評價。"},
+                    {"role": "system", "content": temp_sys_prompt + "\n叶ちゃん傳了照片，請先描述你看到了什麼並給予評價。"},
                     {"role": "user", "content": [
                         {"type": "text", "text": user_caption},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
@@ -170,31 +198,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": SYSTEM_PROMPT}] + CHAT_HISTORY
+                messages=[{"role": "system", "content": temp_sys_prompt}] + CHAT_HISTORY
             )
             bot_reply = completion.choices[0].message.content
         except Exception as e:
             bot_reply = "人家大腦打結了... ( ＞x＜ )"
             print(f"Text Error: {e}")
            
-    # --- 共通回覆發送邏輯 (優化版：保留標點符號) ---
+    # --- 共通回覆發送邏輯 (修正顏文字被切斷的問題) ---
     if bot_reply:
         CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
         if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
         
-        # 1. 統一標點，但先不要把逗號換成句號，避免切得太碎
+        # 1. 先處理掉全形逗號，換成空格（增加話嘮感但不強制切斷）
         processed_text = bot_reply.replace("，", " ").replace(",", " ")
         
-        # 2. 使用「正則表達式」捕捉標點符號並保留它
-        # 這個正則會找 句號/問號/驚嘆號/換行 之後的位置進行拆分，但保留符號本身
-        messages = [msg.strip() for msg in re.split(r'(?<=[。！？!?\n\s])', processed_text) if msg.strip()]
+        # 2. 修改切分規則：
+        # 使用 (?<=[。！？!?\n]) -> 遇到這四種標點符號與換行時「才」切斷，並保留符號
+        # 這裡我們「移除」了 \s (空格)，這樣顏文字中間的空格就不會觸發斷句了
+        messages = [msg.strip() for msg in re.split(r'(?<=[。！？!?\n])', processed_text) if msg.strip()]
         
         for msg in messages:
-            # 3. 調整等待時間，讓節奏更自然
+            # 3. 模擬真實打字速度 (每字 0.15 秒，最快 0.8 秒)
             wait_time = min(max(0.8, len(msg) * 0.15), 2.0)
             await asyncio.sleep(wait_time)
             
-            # 4. 正式發送 (現在 msg 會包含末尾的標點符號了！)
+            # 4. 發送
             await update.message.reply_text(msg)
 
 # ---------------------------------------------------------
