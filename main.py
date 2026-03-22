@@ -1,7 +1,8 @@
 import os
-import logging
+import re
 import asyncio
-from groq import Groq  # 換成 Groq 庫
+import random
+from groq import Groq
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
@@ -21,9 +22,16 @@ logging.basicConfig(level=logging.INFO)
 GROQ_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 
+async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
+    global LAST_CHAT_ID
+    if not LAST_CHAT_ID:
+        return
+    # ... 妳的 Groq 生成與發送邏輯 ...
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global LAST_CHAT_ID
     LAST_CHAT_ID = update.effective_chat.id
+    # ... 妳的訊息處理邏輯 ...
 
     user_text = update.message.text
     # 這裡可以保留 Print Log 方便妳在 Railway 觀察小絢有沒有抓到訊息
