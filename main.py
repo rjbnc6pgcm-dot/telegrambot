@@ -47,8 +47,8 @@ SYSTEM_PROMPT = """
    - 開心：٩( ᐛ )و、(๑>◡<๑)、( ´꒳`)੭⁾⁾
    - 害羞：(〃∀〃)、(つд⊂)、(//∇//)、(*ﾉ▽ﾉ)
    - 委屈：( ＞x＜ )、(；ω；)、(っ´ω`ｃ)
-4. 你是一個超級話嘮！對叶ちゃん有說不完的話。
-   - 每一輪回覆必須包含 3 到 5 個「極短句」。
+4. 你有點話嘮，喜歡發訊息給叶ちゃん。
+   - 每一輪回覆必須包含 1 到 3 個「極短句」。
    - 每句話不要超過 10 個字，且結尾必須使用「。」、「！」、「？」或顏表情來斷句。
    - 絕對不要把所有話擠在同一個段落，要像傳簡訊一樣分開表達。
    - 範例：
@@ -205,25 +205,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bot_reply = "人家大腦打結了... ( ＞x＜ )"
             print(f"Text Error: {e}")
            
-    # --- 共通回覆發送邏輯 (修正顏文字被切斷的問題) ---
+    # --- 共通回覆發送邏輯 (防止標點符號單獨發送) ---
     if bot_reply:
         CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
         if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
         
-        # 1. 先處理掉全形逗號，換成空格（增加話嘮感但不強制切斷）
+        # 1. 統一格式，保留標點拆分
         processed_text = bot_reply.replace("，", " ").replace(",", " ")
         
-        # 2. 修改切分規則：
-        # 使用 (?<=[。！？!?\n]) -> 遇到這四種標點符號與換行時「才」切斷，並保留符號
-        # 這裡我們「移除」了 \s (空格)，這樣顏文字中間的空格就不會觸發斷句了
-        messages = [msg.strip() for msg in re.split(r'(?<=[。！？!?\n])', processed_text) if msg.strip()]
+        # 2. 拆分訊息 (維持之前的後行斷言)
+        raw_messages = [msg.strip() for msg in re.split(r'(?<=[。！？!?\n])', processed_text) if msg.strip()]
         
+        # ✨ 【核心修正】：過濾掉「只有標點符號」的訊息
+        # 如果這一條訊息扣除標點後是空的，我們就不發送它
+        messages = []
+        for m in raw_messages:
+            # 如果這則訊息不全是標點符號，才放進發送清單
+            if re.sub(r'[。！？!?\s]', '', m): 
+                messages.append(m)
+            elif messages:
+                # 如果這則訊息只有標點，我們把它「黏回」上一條訊息的屁股
+                messages[-1] += m
+
+        # 3. 按照順序發送
         for msg in messages:
-            # 3. 模擬真實打字速度 (每字 0.15 秒，最快 0.8 秒)
             wait_time = min(max(0.8, len(msg) * 0.15), 2.0)
             await asyncio.sleep(wait_time)
-            
-            # 4. 發送
             await update.message.reply_text(msg)
 
 # ---------------------------------------------------------
