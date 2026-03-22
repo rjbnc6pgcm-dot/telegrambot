@@ -164,17 +164,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bot_reply = "人家大腦打結了... ( ＞x＜ )"
             print(f"Text Error: {e}")
 
-    # 共通回覆發送邏輯
+    # --- 共通回覆發送邏輯 (拆分多則訊息發送) ---
     if bot_reply:
         CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
         if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
         
+        # 1. 將全角逗號也換成空格，並統一標點
         processed_text = bot_reply.replace("，", " ").replace(",", " ")
         messages = [msg.strip() for msg in re.split(r'[。！？!?\n]', processed_text) if msg.strip()]
+        
         for msg in messages:
-            await asyncio.sleep(max(0.8, len(msg)*0.15))
+            # 3. 模擬「正在輸入」的感覺，根據字數決定等待時間 (每字約 0.2 秒)
+            # 最少等 1 秒，最多不超過 3 秒，避免等太久
+            wait_time = min(max(1.0, len(msg) * 0.2), 3.0)
+            await asyncio.sleep(wait_time)
+            
+            # 4. 正式發送這一小段訊息
             await update.message.reply_text(msg)
-
+           
 # ---------------------------------------------------------
 # 4. 主程式啟動
 # ---------------------------------------------------------
