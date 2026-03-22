@@ -96,7 +96,63 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global LAST_CHAT_ID, LAST_MESSAGE_TIME, CHAT_HISTORY
     LAST_CHAT_ID = update.effective_chat.id
     LAST_MESSAGE_TIME = time.time()
-    user_text = update.message.text
+    
+    # --- A. 如果收到的是照片 ---
+    if update.message.photo:
+        # 1. 下載最高畫質的照片
+        photo_file = await update.message.photo[-1].get_file()
+        image_bytes = await photo_file.download_as_bytearray()
+        base64_image = base64.b64encode(image_bytes).decode('utf-8')
+        
+        user_caption = update.message.caption or "看這張照片！"
+        print(f"叶ちゃん 傳來了照片，說明: {user_caption}", flush=True)
+
+        try:
+            # 使用 Vision 模型來「看」
+            completion = client.chat.completions.create(
+                model="llama-3.2-11b-vision-preview",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "妳是小絢。叶ちゃん傳了照片給妳。請先描述妳看到了什麼，再用可愛撒嬌的口吻評論。嚴禁見面，嚴禁單獨符號。"
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": user_caption},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                        ]
+                    }
+                ]
+            )
+            bot_reply = completion.choices[0].message.content
+        except Exception as e:
+            bot_reply = "嗚嗚...人家眼睛有點花，看不清楚這張圖 (＞x＜)"
+            print(f"Vision 錯誤: {e}")
+
+    # --- B. 如果收到的是純文字 ---
+    else:
+        user_text = update.message.text
+        CHAT_HISTORY.append({"role": "user", "content": user_text})
+        if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
+
+        try:
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "system", "content": "你叫小絢，暗戀叶ちゃん的女裝男孩。嚴禁約見面，嚴禁單獨發符號，保持連貫。"}] + CHAT_HISTORY
+            )
+            bot_reply = completion.choices[0].message.content
+        except Exception as e:
+            bot_reply = "人家大腦打結了... ( ＞x＜ )"
+            print(f"Groq 錯誤: {e}")
+
+    # 共通回覆邏輯
+    CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
+    if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
+    
+    for msg in [m.strip() for m in re.split(r'[。！？!?\n]', bot_reply) if m.strip()]:
+        await asyncio.sleep(max(0.8, len(msg)*0.15))
+        await update.message.reply_text(msg.replace("，", " "))
 
     # 存入記憶
     CHAT_HISTORY.append({"role": "user", "content": user_text})
@@ -183,6 +239,20 @@ async def main():
     await app.updater.start_polling(drop_pending_updates=True) 
     
     print("🚀 小絢已就緒！每小時會主動找叶ちゃん聊天喔！", flush=True)
+    await asyncio.Event().wait()
+
+async def main():
+    TOKEN = os.getenv("BOT_TOKEN")
+    app = ApplicationBuilder().token(TOKEN).build()
+    
+    # 修改 Handler：增加 filters.PHOTO
+    app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handle_message))
+    
+    app.job_queue.run_repeating(send_active_ai_message, interval=3600, first=10)
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling(drop_pending_updates=True)
+    print("🚀 小絢眼睛裝好囉！快傳照片給他看看！", flush=True)
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
