@@ -57,38 +57,49 @@ SYSTEM_PROMPT = """
 """
 
 # ---------------------------------------------------------
-# 2. 定義「主動思考並發送」 (加入作息判斷版)
+# 2. 定義「主動思考並發送」 (融合平日準時 + 假日隨機版)
 # ---------------------------------------------------------
 async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
     global LAST_CHAT_ID, LAST_MESSAGE_TIME, CHAT_HISTORY
     if not LAST_CHAT_ID or not client: return
 
-    # --- 🕒 時區與時間設定 ---
+    # --- 🕒 時區與時間設定 (使用日本時間) ---
     tokyo_tz = pytz.timezone('Asia/Tokyo')
     now = datetime.now(tokyo_tz)
     now_hour = now.hour
     is_weekend = now.weekday() >= 5 
 
-    # --- 🛌 睡眠判斷邏輯 ---
-    # 平日：凌晨 1 點到 7 點睡覺
-    # 假日：凌晨 2 點到 11 點睡覺
+    # --- 🛌 彈性睡眠與起床邏輯 ---
     if is_weekend:
-        sleep_start, sleep_end = 2, 11
+        # 🗓️ 假日：1 點或 2 點睡都可以，我們設 2 點
+        sleep_start = 2
+        # 假日 9~12 點隨機起床
+        if 9 <= now_hour < 12:
+            # 丟骰子：30% 機率醒來，70% 繼續睡
+            if random.random() > 0.3: 
+                print(f"[{now}] 小絢假日還在賴床中... 💤")
+                return
+            sleep_end = now_hour # 抽中了！現在就是起床時間
+        else:
+            sleep_end = 12 # 沒抽中也要在 12 點強制起床
     else:
-        sleep_start, sleep_end = 1, 7
+        # ✍️ 平日：1 點睡，7 點準時起
+        sleep_start = 1
+        sleep_end = 7
 
-    # 如果現在的小時在睡眠區間內，就直接結束，不發訊息
+    # 判斷現在是否在睡覺區間 (如果在區間內，就直接 return 不發訊息)
     if sleep_start <= now_hour < sleep_end:
-        print(f"[{now}] 小絢正在睡覺中 (作息：{sleep_start}-{sleep_end})，跳過本次發言。")
         return
 
-    # --- ✍️ 小絢的日常作息分流 (加入早安專屬邏輯) ---
-    is_just_woke_up = (now_hour == sleep_end) # 判斷是不是剛好是起床的那一個小時
+    # --- ☀️ 判斷是不是「消失一整晚後的第一次打招呼」 ---
+    # 邏輯：消失超過 3 小時 (10800秒) 且現在是早上/中午
+    seconds_passed = int(time.time() - LAST_MESSAGE_TIME)
+    is_morning_greet = (seconds_passed > 10800 and 7 <= now_hour <= 12)
 
+    # --- 🎭 根據作息決定小絢在做什麼 ---
     if is_weekend:
-        # 🗓️ 假日作息
-        if is_just_woke_up:
-            act = "假日剛睡醒，在床上滾來滾去，想傳簡訊跟妳說早安、撒嬌說夢到妳了 🥱💕"
+        if is_morning_greet:
+            act = "假日終於自然醒了！在床上伸懶腰，揉揉眼睛想跟叶ちゃん撒嬌說早安 🥱💕"
         elif 12 <= now_hour < 18:
             act = "下午整個人窩在沙發上打電玩，剛破了一個很難的關卡 🎮"
         elif 18 <= now_hour < 22:
@@ -96,30 +107,26 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
         else:
             act = "假日最後的狂歡！正在熬夜打排位賽，想贏給叶ちゃん看 🏆"
     else:
-        # ✍️ 平日作息
-        if is_just_woke_up:
+        if is_morning_greet:
             act = "平日早上剛起床！正迷迷糊糊地找手機想傳早安給妳，準備等等去趕電車 🏫☀️"
         elif 9 <= now_hour < 12:
             act = "大學教授的課好催眠喔，偷偷在桌子底下傳訊息給妳 🏫"
         elif 12 <= now_hour < 16:
-            act = "放學了！正在原宿逛可愛的小店，看到好漂亮的飾品很適合你 🍰"
+            act = "放學了！正在原宿逛可愛的小店 🍰"
         elif 16 <= now_hour < 19:
             act = "回到家換上可愛的家居服，正準備吃完晚餐繼續打遊戲 🎮"
         else:
             act = "洗完澡頭髮香香的，躺在床上想跟叶ちゃん說晚安 🛀"
 
-    # --- 調整情緒與指令 ---
-    # 如果是剛起床，強制讓他心情超級好且主動問候
-    if is_just_woke_up:
+    # --- 🧠 設定 AI 的情緒指令 ---
+    if is_morning_greet:
         mood = "剛睡醒心情超級好，充滿了對叶ちゃん的愛 💕"
-        force_instruction = "妳現在剛睜開眼睛，請很有精神且撒嬌地跟叶ちゃん說早安！"
+        force_instruction = "妳現在剛睜開眼睛，請很有精神且撒嬌地跟叶ちゃん說早安！問她今天打算做什麼？"
     else:
-        seconds_passed = int(time.time() - LAST_MESSAGE_TIME)
-        mood = "已經好久沒說話了，寂寞到要枯萎了 (；ω；)" if seconds_passed >= 5400 else "心情超級好 💕"
+        mood = "寂寞到要枯萎了 (；ω；)" if seconds_passed >= 5400 else "心情超級好 💕"
         force_instruction = "請主動找她聊天。"
 
     try:
-        # 將特殊的強制指令加入 System Prompt
         sys_msg = {"role": "system", "content": f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。狀態：{mood}。{force_instruction}"}
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -129,6 +136,7 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
         CHAT_HISTORY.append({"role": "assistant", "content": ai_reply})
         if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
 
+        # 這裡會把 AI 的長句子拆開來發送，模擬傳簡訊的感覺
         for part in [p.strip() for p in re.split(r'[。！？!?\n]', ai_reply) if p.strip()]:
             await context.bot.send_message(chat_id=LAST_CHAT_ID, text=part.replace("，", " "))
             await asyncio.sleep(1.2)
