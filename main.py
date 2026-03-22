@@ -29,9 +29,11 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
     if not LAST_CHAT_ID or not client:
         return
 
-    # 時間觀念計算
-    seconds_passed = int(time.time() - LAST_MESSAGE_TIME)
-    hours_passed = seconds_passed // 3600
+    import pytz
+    from datetime import datetime
+    
+    tokyo_tz = pytz.timezone('Asia/Tokyo')
+    now_hour = datetime.now(tokyo_tz).hour
 
     # 根據時間差決定心情
     if hours_passed >= 3:
