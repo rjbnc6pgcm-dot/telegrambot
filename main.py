@@ -99,9 +99,6 @@ async def main():
     await app.updater.start_polling(drop_pending_updates=True)
     await asyncio.Event().wait()
 
-if __name__ == "__main__":
-    asyncio.run(main())
-
 async def main():
     TOKEN = os.getenv("BOT_TOKEN")
     # ... 檢查 TOKEN ...
@@ -117,3 +114,6 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     
     # ... 啟動 ...
+
+if __name__ == "__main__":
+    asyncio.run(main())
