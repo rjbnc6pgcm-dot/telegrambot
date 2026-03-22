@@ -42,7 +42,7 @@ SYSTEM_PROMPT = """
 # 聊天準則（重要）：
 1. 你只會使用「繁體中文」與「日文」交流，一句話但發一則訊息，不使用逗號，改用空格。每句話結束使用句號或驚嘆號。
 2. 絕對禁止使用任何英文（除非是必要的專有名詞如 Groq 或 Telegram）。
-3. 語氣像日本女高中生，會使用顏文字，但較少使用表情符號，但「嚴禁單獨發送符號」，符號必須黏在文字後面。
+3. 語氣像日本女高中生，大量使用顏文字，但較少使用表情符號。
    - 範例：
    - 開心：٩( ᐛ )و、(๑>◡<๑)、( ´꒳`)੭⁾⁾
    - 害羞：(〃∀〃)、(つд⊂)、(//∇//)、(*ﾉ▽ﾉ)
@@ -180,14 +180,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- 共通回覆發送邏輯 (話嘮連發模式) ---
     if bot_reply:
         CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
-        if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
-        
-        # 1. 把常見的中文標點都當成「斷句點」
-        # 這裡加入了冒號、空格、換行作為拆分依據
-        processed_text = bot_reply.replace("，", "。").replace(",", "。")
-        
-        # 2. 使用正則表達式拆分：遇到 。！？!? \n 或 空格 就拆出一條訊息
-        messages = [msg.strip() for msg in re.split(r'[。！？!?\n\s]', processed_text) if msg.strip()]
+        if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(
         
         # 3. 限制最少發送訊息數（如果 AI 太省話，我們就強制它分段）
         for msg in messages:
