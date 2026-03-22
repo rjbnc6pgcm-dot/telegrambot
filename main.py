@@ -127,17 +127,30 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(1.2)
     except Exception as e:
         print(f"主動發言出錯: {e}")
-
+       
 # ---------------------------------------------------------
-# 3. 處理使用者訊息 (最終進化版)
+# 3. 處理使用者訊息 (真人模擬模擬版)
 # ---------------------------------------------------------
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global LAST_CHAT_ID, LAST_MESSAGE_TIME, CHAT_HISTORY
     
-    # A. 先計算妳消失了多久 (在更新時間戳之前計算)
+    # A. 計算妳消失了多久 (在更新時間戳之前計算)
     seconds_since_last = int(time.time() - LAST_MESSAGE_TIME)
+
+    # --- ⏳ 隨機回覆延遲邏輯 (模擬真人) ---
+    # 設定隨機秒數：例如 10 秒到 120 秒之間，可以根據妳的喜好調整範圍
+    delay_seconds = random.randint(10, 120) 
     
-    # 更新全域變數
+    # 在等待期間，讓 Telegram 顯示「小絢正在輸入...」
+    # 注意：typing 狀態通常只持續 5 秒，所以如果延遲很長，我們可以每隔幾秒發一次
+    for _ in range(delay_seconds // 5 + 1):
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        # 每次顯示後等待一小段時間，直到總延遲時間結束
+        remaining = delay_seconds - (_ * 5)
+        await asyncio.sleep(min(5, remaining) if remaining > 0 else 0)
+    # ------------------------------------
+
+    # 更新全域變數 (這時候才算正式「回覆」的時間)
     LAST_CHAT_ID = update.effective_chat.id
     LAST_MESSAGE_TIME = time.time()
     bot_reply = ""
@@ -160,67 +173,51 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif 16 <= now_hour < 19: act = "回到家換上可愛的家居服，正準備吃完晚餐繼續打遊戲 🎮"
         else: act = "洗完澡頭髮香香的，躺在床上想跟叶ちゃん說晚安 🛀"
 
-    # C. 根據妳消失的時間給予不同反應 (例如超過 3 小時)
+    # C. 根據妳消失的時間給予不同反應
     time_mood = "叶ちゃん終於回人家了！人家等妳好久，差點以為妳不理我了 (；ω；)" if seconds_since_last > 10800 else "叶ちゃん妳回來了呀 💕"
 
     # D. 組合成最終的強制指令
     temp_sys_prompt = f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。\n妳現在對叶ちゃん回訊息的當下反應：{time_mood}。"
 
-    # --- 呼叫 AI 模型 ---
+    # --- 呼叫 AI 模型 (圖片/文字部分與之前相同) ---
     if update.message.photo:
         try:
             photo_file = await update.message.photo[-1].get_file()
             image_bytes = await photo_file.download_as_bytearray()
             base64_image = base64.b64encode(image_bytes).decode('utf-8')
-            
             completion = client.chat.completions.create(
                 model="llama-3.2-11b-vision-preview",
                 messages=[
-                    {"role": "system", "content": temp_sys_prompt + "\n叶ちゃん傳了照片，請先描述你看到了什麼並給予評價。"},
-                    {"role": "user", "content": [
-                        {"type": "text", "text": update.message.caption or "看這張照片！"},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                    ]}
+                    {"role": "system", "content": temp_sys_prompt + "\n叶ちゃん傳了照片，請評價。"},
+                    {"role": "user", "content": [{"type": "text", "text": update.message.caption or "看照片！"}, 
+                                                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}]}
                 ]
             )
             bot_reply = completion.choices[0].message.content
-        except Exception as e:
-            bot_reply = "嗚嗚...人家眼睛花花的，看不清楚這張圖 (＞x＜)"
+        except: bot_reply = "嗚嗚...人家眼睛花花的 (＞x＜)"
 
     elif update.message.text:
         user_text = update.message.text
         CHAT_HISTORY.append({"role": "user", "content": user_text})
         if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
-        
         try:
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "system", "content": temp_sys_prompt}] + CHAT_HISTORY
             )
             bot_reply = completion.choices[0].message.content
-        except Exception as e:
-            bot_reply = "人家大腦打結了... ( ＞x＜ )"
+        except: bot_reply = "人家大腦打結了... ( ＞x＜ )"
 
-    # --- 共通回覆發送邏輯 (極致優化版) ---
+    # --- 共通回覆發送邏輯 ---
     if bot_reply:
         CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
         if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
-        
-        # 1. 處理空格與逗號
         processed_text = bot_reply.replace("，", " ").replace(",", " ")
-        
-        # 2. 拆分訊息 (保留標點符號，不切斷顏文字空格)
         raw_messages = [msg.strip() for msg in re.split(r'(?<=[。！？!?\n])', processed_text) if msg.strip()]
-        
-        # 3. 標點過濾機制
         messages = []
         for m in raw_messages:
-            if re.sub(r'[。！？!?\s]', '', m): 
-                messages.append(m)
-            elif messages:
-                messages[-1] += m
-
-        # 4. 節奏感發送
+            if re.sub(r'[。！？!?\s]', '', m): messages.append(m)
+            elif messages: messages[-1] += m
         for msg in messages:
             wait_time = min(max(0.8, len(msg) * 0.15), 2.0)
             await asyncio.sleep(wait_time)
