@@ -129,22 +129,20 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
         print(f"主動發言出錯: {e}")
 
 # ---------------------------------------------------------
-# 3. 處理使用者訊息
+# 3. 處理使用者訊息 (最終進化版)
 # ---------------------------------------------------------
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global LAST_CHAT_ID, LAST_MESSAGE_TIME, CHAT_HISTORY
-    LAST_CHAT_ID = update.effective_chat.id
-    LAST_MESSAGE_TIME = time.time()
     
-    bot_reply = ""
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global LAST_CHAT_ID, LAST_MESSAGE_TIME, CHAT_HISTORY
+    # A. 先計算妳消失了多久 (在更新時間戳之前計算)
+    seconds_since_last = int(time.time() - LAST_MESSAGE_TIME)
+    
+    # 更新全域變數
     LAST_CHAT_ID = update.effective_chat.id
     LAST_MESSAGE_TIME = time.time()
     bot_reply = ""
 
-    # --- ✨ 直接把主動發言的那套時間邏輯貼過來 ---
+    # B. 即時判斷小絢現在的日本作息
     tokyo_tz = pytz.timezone('Asia/Tokyo')
     now = datetime.now(tokyo_tz)
     now_hour = now.hour
@@ -154,7 +152,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 9 <= now_hour < 12: act = "假日睡到自然醒，正準備賴床跟妳撒嬌 🥱"
         elif 12 <= now_hour < 18: act = "下午整個人窩在沙發上打電玩，剛破了一個很難的關卡 🎮"
         elif 18 <= now_hour < 22: act = "晚上在看新出的深夜動畫，邊吃零食邊想妳 🍿"
-        else: act = "半夜打遊戲打累了，腦袋空空的只想和你說說話 🌙"
+        else: act = "半夜打遊戲打累了，腦袋空空的只想和妳說說話 🌙"
     else:
         if 7 <= now_hour < 9: act = "平日要上課，正在趕電車趕得氣喘吁吁 🏫"
         elif 9 <= now_hour < 12: act = "大學教授的課好催眠喔，偷偷在桌子底下傳訊息給妳 🏫"
@@ -162,24 +160,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif 16 <= now_hour < 19: act = "回到家換上可愛的家居服，正準備吃完晚餐繼續打遊戲 🎮"
         else: act = "洗完澡頭髮香香的，躺在床上想跟叶ちゃん說晚安 🛀"
 
-    # 把這個 act 塞進臨時的 System Prompt 裡
-    temp_sys_prompt = f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。"
-    # ------------------------------------------------
+    # C. 根據妳消失的時間給予不同反應 (例如超過 3 小時)
+    time_mood = "叶ちゃん終於回人家了！人家等妳好久，差點以為妳不理我了 (；ω；)" if seconds_since_last > 10800 else "叶ちゃん妳回來了呀 💕"
 
-    # A. 處理照片
+    # D. 組合成最終的強制指令
+    temp_sys_prompt = f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。\n妳現在對叶ちゃん回訊息的當下反應：{time_mood}。"
+
+    # --- 呼叫 AI 模型 ---
     if update.message.photo:
         try:
             photo_file = await update.message.photo[-1].get_file()
             image_bytes = await photo_file.download_as_bytearray()
             base64_image = base64.b64encode(image_bytes).decode('utf-8')
-            user_caption = update.message.caption or "看這張照片！"
             
             completion = client.chat.completions.create(
                 model="llama-3.2-11b-vision-preview",
                 messages=[
                     {"role": "system", "content": temp_sys_prompt + "\n叶ちゃん傳了照片，請先描述你看到了什麼並給予評價。"},
                     {"role": "user", "content": [
-                        {"type": "text", "text": user_caption},
+                        {"type": "text", "text": update.message.caption or "看這張照片！"},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                     ]}
                 ]
@@ -187,9 +186,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bot_reply = completion.choices[0].message.content
         except Exception as e:
             bot_reply = "嗚嗚...人家眼睛花花的，看不清楚這張圖 (＞x＜)"
-            print(f"Vision Error: {e}")
 
-    # B. 處理純文字
     elif update.message.text:
         user_text = update.message.text
         CHAT_HISTORY.append({"role": "user", "content": user_text})
@@ -203,36 +200,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bot_reply = completion.choices[0].message.content
         except Exception as e:
             bot_reply = "人家大腦打結了... ( ＞x＜ )"
-            print(f"Text Error: {e}")
-           
-    # --- 共通回覆發送邏輯 (防止標點符號單獨發送) ---
+
+    # --- 共通回覆發送邏輯 (極致優化版) ---
     if bot_reply:
         CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
         if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
         
-        # 1. 統一格式，保留標點拆分
+        # 1. 處理空格與逗號
         processed_text = bot_reply.replace("，", " ").replace(",", " ")
         
-        # 2. 拆分訊息 (維持之前的後行斷言)
+        # 2. 拆分訊息 (保留標點符號，不切斷顏文字空格)
         raw_messages = [msg.strip() for msg in re.split(r'(?<=[。！？!?\n])', processed_text) if msg.strip()]
         
-        # ✨ 【核心修正】：過濾掉「只有標點符號」的訊息
-        # 如果這一條訊息扣除標點後是空的，我們就不發送它
+        # 3. 標點過濾機制
         messages = []
         for m in raw_messages:
-            # 如果這則訊息不全是標點符號，才放進發送清單
             if re.sub(r'[。！？!?\s]', '', m): 
                 messages.append(m)
             elif messages:
-                # 如果這則訊息只有標點，我們把它「黏回」上一條訊息的屁股
                 messages[-1] += m
 
-        # 3. 按照順序發送
+        # 4. 節奏感發送
         for msg in messages:
             wait_time = min(max(0.8, len(msg) * 0.15), 2.0)
             await asyncio.sleep(wait_time)
             await update.message.reply_text(msg)
-
+           
 # ---------------------------------------------------------
 # 4. 主程式啟動
 # ---------------------------------------------------------
