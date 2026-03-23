@@ -194,16 +194,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # D. 組合成最終的強制指令
     temp_sys_prompt = f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。\n妳現在對叶ちゃん回訊息的當下反應：{time_mood}。"
 
-    # --- 呼叫 AI 模型 ---
+    # --- 呼叫 AI 模型 (修正下架模型與報錯邏輯) ---
     if update.message.photo:
         try:
             photo_file = await update.message.photo[-1].get_file()
             image_bytes = await photo_file.download_as_bytearray()
             base64_image = base64.b64encode(image_bytes).decode('utf-8')
             
-            # 注意：這裡每一行都要比上面的 try 縮進 4 個空格
+            # 模型改用最新的 90b 版本
             completion = client.chat.completions.create(
-                model="llama-3.2-11b-vision-preview",
+                model="llama-3.2-90b-vision-preview", 
                 messages=[
                     {"role": "system", "content": temp_sys_prompt + "\n叶ちゃん傳了照片，請評價。"},
                     {"role": "user", "content": [
@@ -212,13 +212,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ]}
                 ]
             )
-            bot_reply = completion.choices[0].message.content
+            bot_reply = completion.choices[0].message.content # 確保這行在 try 裡面
         except Exception as e:
             print(f"❌ 視覺模型出錯: {e}")
             bot_reply = "嗚嗚...人家眼睛花花的 (＞x＜)"
-            bot_reply = completion.choices[0].message.content
-        except: bot_reply = "嗚嗚...人家眼睛花花的 (＞x＜)"
-
+           
     elif update.message.text:
         user_text = update.message.text
         CHAT_HISTORY.append({"role": "user", "content": user_text})
