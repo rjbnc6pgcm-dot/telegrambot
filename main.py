@@ -207,9 +207,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 messages=[
                     {"role": "system", "content": temp_sys_prompt + "\n叶ちゃん傳了照片，請評價。"},
                     {"role": "user", "content": [
-                        {"type": "text", "text": update.message.caption or "看照片！"}, 
+                        {"type": "text", "text": update.message.caption or "看照片！"}, # 這裡會抓妳寫的備註
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                    ]}
+                   ]}
                 ]
             )
             bot_reply = completion.choices[0].message.content # 確保這行在 try 裡面
@@ -227,21 +227,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 messages=[{"role": "system", "content": temp_sys_prompt}] + CHAT_HISTORY
             )
             bot_reply = completion.choices[0].message.content
-        except: bot_reply = "人家大腦打結了... ( ＞x＜ )"
+        except: 
+            bot_reply = "人家大腦打結了... ( ＞x＜ )"
 
-    # --- 共通回覆發送邏輯 ---
+    # --- 共通回覆發送邏輯 (關鍵：確保與上面的 if/elif 同一垂直線) ---
     if bot_reply:
+        # 將回覆存入歷史紀錄
         CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
         if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
+        
+        # 處理格式：模擬真人打字斷句
         processed_text = bot_reply.replace("，", " ").replace(",", " ")
         raw_messages = [msg.strip() for msg in re.split(r'(?<=[。！？!?\n])', processed_text) if msg.strip()]
-        messages = []
-        for m in raw_messages:
-            if re.sub(r'[。！？!?\s]', '', m): messages.append(m)
-            elif messages: messages[-1] += m
-        for msg in messages:
+        
+        for msg in raw_messages:
+            # 根據字數決定等待時間 (每字約 0.15 秒，最少 0.8 秒)
             wait_time = min(max(0.8, len(msg) * 0.15), 2.0)
             await asyncio.sleep(wait_time)
+            # 真正發出訊息
             await update.message.reply_text(msg)
            
 # ---------------------------------------------------------
