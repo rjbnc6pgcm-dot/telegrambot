@@ -195,6 +195,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     temp_sys_prompt = f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。\n妳現在對叶ちゃん回訊息的當下反應：{time_mood}。"
 
     # --- 呼叫 AI 模型 (修正下架模型與報錯邏輯) ---
+    print(f"目前可用的模型清單: {[m.id for m in client.models.list().data]}")
+   
     if update.message.photo:
         try:
             photo_file = await update.message.photo[-1].get_file()
