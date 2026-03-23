@@ -203,7 +203,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # 模型改用最新的 90b 版本
             completion = client.chat.completions.create(
-                model="llama-3.2-90b-vision-preview", 
+                model="llama-3.2-90b-vision-instruct", 
                 messages=[
                     {"role": "system", "content": temp_sys_prompt + "\n叶ちゃん傳了照片，請評價。"},
                     {"role": "user", "content": [
