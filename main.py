@@ -194,28 +194,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # D. 組合成最終的強制指令
     temp_sys_prompt = f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。\n妳現在對叶ちゃん回訊息的當下反應：{time_mood}。"
 
-    # --- 呼叫 AI 模型 (圖片/文字部分與之前相同) ---
+    # --- 呼叫 AI 模型 ---
     if update.message.photo:
         try:
             photo_file = await update.message.photo[-1].get_file()
             image_bytes = await photo_file.download_as_bytearray()
             base64_image = base64.b64encode(image_bytes).decode('utf-8')
-            try:
-    # 建議改用 llama-3.2-90b-vision-preview 或確認模型名稱正確
-    completion = client.chat.completions.create(
-        model="llama-3.2-11b-vision-preview", 
-        messages=[
-            {"role": "system", "content": temp_sys_prompt + "\n叶ちゃん傳了照片，請評價。"},
-            {"role": "user", "content": [
-                {"type": "text", "text": update.message.caption or "看照片！"}, 
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-            ]}
-        ]
-    )
-    bot_reply = completion.choices[0].message.content
-except Exception as e:
-    print(f"Groq 視覺模型出錯: {e}") # 這樣 Log 就會顯示具體原因
-    bot_reply = "嗚嗚...人家眼睛花花的 (＞x＜)"
+            
+            # 注意：這裡每一行都要比上面的 try 縮進 4 個空格
+            completion = client.chat.completions.create(
+                model="llama-3.2-11b-vision-preview",
+                messages=[
+                    {"role": "system", "content": temp_sys_prompt + "\n叶ちゃん傳了照片，請評價。"},
+                    {"role": "user", "content": [
+                        {"type": "text", "text": update.message.caption or "看照片！"}, 
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                    ]}
+                ]
+            )
+            bot_reply = completion.choices[0].message.content
+        except Exception as e:
+            print(f"❌ 視覺模型出錯: {e}")
+            bot_reply = "嗚嗚...人家眼睛花花的 (＞x＜)"
             bot_reply = completion.choices[0].message.content
         except: bot_reply = "嗚嗚...人家眼睛花花的 (＞x＜)"
 
