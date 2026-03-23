@@ -4,8 +4,6 @@ import asyncio
 import random
 import logging
 import time
-import base64
-import datetime
 import pytz
 from datetime import datetime
 from groq import Groq
@@ -194,60 +192,40 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # D. 組合成最終的強制指令
     temp_sys_prompt = f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。\n妳現在對叶ちゃん回訊息的當下反應：{time_mood}。"
 
-    # --- 呼叫 AI 模型 (修正下架模型與報錯邏輯) ---
-    print(f"目前可用的模型清單: {[m.id for m in client.models.list().data]}")
-   
-    if update.message.photo:
-        try:
-            photo_file = await update.message.photo[-1].get_file()
-            image_bytes = await photo_file.download_as_bytearray()
-            base64_image = base64.b64encode(image_bytes).decode('utf-8')
-            
-            # 模型改用最新的 90b 版本
-            completion = client.chat.completions.create(
-                model="llama-3.2-11b-vision-instruct", 
-                messages=[
-                    {"role": "system", "content": temp_sys_prompt + "\n叶ちゃん傳了照片，請評價。"},
-                    {"role": "user", "content": [
-                        {"type": "text", "text": update.message.caption or "看照片！"}, # 這裡會抓妳寫的備註
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                   ]}
-                ]
-            )
-            bot_reply = completion.choices[0].message.content # 確保這行在 try 裡面
-        except Exception as e:
-            print(f"❌ 視覺模型出錯: {e}")
-            bot_reply = "嗚嗚...人家眼睛花花的 (＞x＜)"
-           
-    elif update.message.text:
-        user_text = update.message.text
-        CHAT_HISTORY.append({"role": "user", "content": user_text})
-        if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
-        try:
-            completion = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": temp_sys_prompt}] + CHAT_HISTORY
-            )
-            bot_reply = completion.choices[0].message.content
-        except: 
-            bot_reply = "人家大腦打結了... ( ＞x＜ )"
+    # --- 呼叫 AI 模型 (純文字版) ---
+    # 如果不是文字訊息，我們就直接結束，不理會照片
+    if not update.message.text:
+        return
 
-    # --- 共通回覆發送邏輯 (關鍵：確保與上面的 if/elif 同一垂直線) ---
-    if bot_reply:
-        # 將回覆存入歷史紀錄
-        CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
-        if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
+    user_text = update.message.text
+    CHAT_HISTORY.append({"role": "user", "content": user_text})
+    if len(CHAT_HISTORY) > 10: 
+        CHAT_HISTORY.pop(0)
+
+    try:
+        # 只使用最強、最穩定的文字模型
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "system", "content": temp_sys_prompt}] + CHAT_HISTORY
+        )
+        bot_reply = completion.choices[0].message.content
         
-        # 處理格式：模擬真人打字斷句
-        processed_text = bot_reply.replace("，", " ").replace(",", " ")
-        raw_messages = [msg.strip() for msg in re.split(r'(?<=[。！？!?\n])', processed_text) if msg.strip()]
-        
-        for msg in raw_messages:
-            # 根據字數決定等待時間 (每字約 0.15 秒，最少 0.8 秒)
-            wait_time = min(max(0.8, len(msg) * 0.15), 2.0)
-            await asyncio.sleep(wait_time)
-            # 真正發出訊息
-            await update.message.reply_text(msg)
+        # --- 共通回覆發送邏輯 (放在 try 裡面最安全) ---
+        if bot_reply:
+            CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
+            if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
+            
+            processed_text = bot_reply.replace("，", " ").replace(",", " ")
+            raw_messages = [msg.strip() for msg in re.split(r'(?<=[。！？!?\n])', processed_text) if msg.strip()]
+            
+            for msg in raw_messages:
+                wait_time = min(max(0.8, len(msg) * 0.15), 2.0)
+                await asyncio.sleep(wait_time)
+                await update.message.reply_text(msg)
+
+    except Exception as e:
+        print(f"❌ 文字模型出錯: {e}")
+        await update.message.reply_text("人家大腦打結了... ( ＞x＜ )")
            
 # ---------------------------------------------------------
 # 4. 主程式啟動
@@ -257,7 +235,7 @@ async def main():
     if not TOKEN: return
     app = ApplicationBuilder().token(TOKEN).build()
 
-    app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handle_message))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # 鬧鐘：每 1800 秒一次
     app.job_queue.run_repeating(send_active_ai_message, interval=1800, first=10)
