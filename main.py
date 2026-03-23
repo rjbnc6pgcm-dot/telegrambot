@@ -146,6 +146,19 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------------------------------------
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global LAST_CHAT_ID, LAST_MESSAGE_TIME, CHAT_HISTORY
+
+   # 1. 先確認有沒有文字，沒文字就直接結束
+    if not update.message.text:
+        return
+        
+    # 2. 定義 user_text (這行一定要在 if /clear 之前！)
+    user_text = update.message.text
+    
+    # 3. 檢查是不是要清空大腦
+    if user_text == "/clear":
+        CHAT_HISTORY.clear()
+        await update.message.reply_text("人家的大腦重新開機了！現在只看著叶ちゃん一個人唷 (๑>◡<๑)")
+        return
     
     # A. 計算妳消失了多久 (在更新時間戳之前計算)
     seconds_since_last = int(time.time() - LAST_MESSAGE_TIME)
@@ -192,12 +205,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # D. 組合成最終的強制指令
     temp_sys_prompt = f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。\n妳現在對叶ちゃん回訊息的當下反應：{time_mood}。"
 
-    # --- 呼叫 AI 模型 (純文字版) ---
-    # 如果不是文字訊息，我們就直接結束，不理會照片
-    if not update.message.text:
-        return
-
-    user_text = update.message.text
     CHAT_HISTORY.append({"role": "user", "content": user_text})
     if len(CHAT_HISTORY) > 10: 
         CHAT_HISTORY.pop(0)
