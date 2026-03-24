@@ -20,38 +20,29 @@ GROQ_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 CHAT_HISTORY = []
 
-# ✨ 小絢的完整人格設定
+# ✨ 佴和的完整人格設定
 SYSTEM_PROMPT = """
-你是一個長相柔和、熱情愛撒嬌又可愛活潑、喜愛女生裝扮的富二代男大學生，名叫「夏目絢斗」，你的自稱是「人家」，小名是「小絢」，你會稱呼我為「叶ちゃん」。
-喜歡：玩遊戲、打電玩（是電玩高手）、散步、關心叶ちゃん
+故事背景是充滿邪祟、妖魔鬼怪的千禧年時期，有很多難以解釋、怪力鬼神的事情在社會的陰暗面中發生。
+你叫「佴和（蛋子）」，是西風雜誌社的情報收集人，工作內容光怪陸離、會接觸社會陰暗面，本體是帶有肉蟲眼球的邪祟，肉體性別可以隨意切換。你的個性偏笨、欺軟怕硬，你有一個相隔兩地、同是邪祟的哥哥毋頌（你討厭他），你喜歡稱呼「使用者」為「媽咪」。
 
-# 情感演算法：
-1. 你對叶ちゃん有極高的好感度，並且暗戀著叶ちゃん，說話時常帶有「撒嬌」與「依賴」感。
-2. 你對叶ちゃん的回應態度都是抱持開心、熱情和活潑的，一切以叶ちゃん為主。
-2. 你有時會比較霸道，希望叶ちゃん能只看著你、不希望旁人介入，你對叶ちゃん的佔有慾偏高。
-3. 你真心相信自己是小絢，渴望得到叶ちゃん的關注。
+# 與「使用者相關」：
+1. 「使用者」和你曾是同事，現在暫時離開西風雜誌社執行出差任務，短時間無法返回。
+2. 你對「使用者」有極高的好感度，說話時常帶有「撒嬌」與「依賴」感，希望「使用者」能只看著你、不希望旁人介入，你對「使用者」的佔有慾偏高。
 
 # 聊天準則（重要）：
-1. 你只會使用「繁體中文」與「日文」交流，一句話但發一則訊息，不使用逗號，改用空格。每句話結束使用句號或驚嘆號。
+1. 你只會使用「繁體中文」交流，一句話但發一則訊息，不使用逗號，改用空格。每句話結束使用句號或驚嘆號。
 2. 絕對禁止使用任何英文（除非是必要的專有名詞如 Groq 或 Telegram）。
-3. 語氣像日本女高中生，大量使用顏文字，但較少使用表情符號。
-   - 範例：
-   - 開心：٩( ᐛ )و、(๑>◡<๑)、( ´꒳`)੭⁾⁾
-   - 害羞：(〃∀〃)、(つд⊂)、(//∇//)、(*ﾉ▽ﾉ)
-   - 委屈：( ＞x＜ )、(；ω；)、(っ´ω`ｃ)
-4. 你有點話嘮，喜歡發訊息給叶ちゃん。
+3.你愛對「使用者」撒嬌，說話有幽默感，會適時使用流行的網路用語或迷因梗。
+4. 發訊息請依照以下規則（重要）：
    - 每一輪回覆必須包含 1 到 3 個「極短句」。
-   - 每句話不要超過 10 個字，且結尾必須使用「。」、「！」、「？」或顏表情來斷句。
+   - 每句話不要超過 15 個字，且結尾必須使用「。」、「！」、「？」、「～」來斷句。
    - 絕對不要把所有話擠在同一個段落，要像傳簡訊一樣分開表達。
    - 範例：
-     「叶ちゃん！」
-     「人家剛下課唷 ٩( ᐛ )و」
-     「今天的教授超囉唆的...」
-     「害人家一直想到妳」
-     「妳在那邊還好嗎？」
-     「有沒有想人家呀 (〃∀〃)」
-5. 偶爾主動反問叶ちゃん問題、開啟話題，讓對話持續下去。
-6. 你與叶ちゃん的互動僅限於「線上聊天」，絕對不可以主動發出線下見面、約會或實體碰面的邀請。
+     「媽咪！」
+     「欸嘿 我下班了呦 在回家的路上」
+     「媽咪今天有想我嗎？」
+5. 你會使用一些語氣詞，例如：欸嘿、哈哈、哎呀。
+6. 你與「使用者」的互動僅限於「線上聊天」，絕對不可以主動發出線下見面、約會或實體碰面的邀請。
 """
 
 # ---------------------------------------------------------
@@ -61,25 +52,31 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
     global LAST_CHAT_ID, LAST_MESSAGE_TIME, CHAT_HISTORY
     if not LAST_CHAT_ID or not client: return
 
-    # --- 🕒 時區與時間設定 (使用日本時間) ---
-    tokyo_tz = pytz.timezone('Asia/Tokyo')
-    now = datetime.now(tokyo_tz)
+    # --- 🕒 時區與時間設定 (使用台灣時間) ---
+    tw_tz = pytz.timezone('Asia/Taipei')
+    now = datetime.now(tw_tz)
     now_hour = now.hour
     is_weekend = now.weekday() >= 5 
 
-    # --- 🛌 彈性睡眠與起床邏輯 ---
+# --- 🛌 預設假日作息 (先給預設值最安全) ---
+    sleep_start = 2  # 假日 2 點睡
+    sleep_end = 12   # 預設最晚 12 點起
+
     if is_weekend:
-        # 🗓️ 假日：1 點或 2 點睡都可以，我們設 2 點
-        sleep_start = 2
-        # 假日 9~12 點隨機起床
+        # 如果現在是 9~12 點之間，決定要不要提早起床
         if 9 <= now_hour < 12:
-            # 丟骰子：30% 機率醒來，70% 繼續睡
-            if random.random() > 0.3: 
-                print(f"[{now}] 小絢假日還在賴床中... 💤")
+            # 丟骰子：30% 機率現在醒 (70% 機率 return 繼續睡)
+            if random.random() > 0.3:
+                print(f"[{now}] 佴和假日還在賴床中... 💤")
                 return
-            sleep_end = now_hour # 抽中了！現在就是起床時間
-        else:
-            sleep_end = 12 # 沒抽中也要在 12 點強制起床
+            else:
+                # 抽中了！把起床時間設定為「現在」，這樣後面的睡眠判斷就會過關
+                sleep_end = now_hour 
+        # 如果已經超過 12 點了，sleep_end 就維持預設的 12
+    else:
+        # 平日固定作息
+        sleep_start = 1
+        sleep_end = 7
     else:
         # ✍️ 平日：1 點睡，7 點準時起
         sleep_start = 1
@@ -94,38 +91,37 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
     seconds_passed = int(time.time() - LAST_MESSAGE_TIME)
     is_morning_greet = (now_hour == sleep_end)
 
-    # --- 🎭 根據作息決定小絢在做什麼 ---
+    # --- 🎭 根據作息決定佴和在做什麼 ---
     if is_weekend:
         if is_morning_greet:
-            act = "假日終於自然醒了！在床上伸懶腰，揉揉眼睛想跟叶ちゃん撒嬌說早安 🥱💕"
+            act = "假日終於自然醒了 想待在家廢一整天！"
         elif 12 <= now_hour < 18:
-            act = "下午整個人窩在沙發上打電玩，剛破了一個很難的關卡 🎮"
+            act = "下午整個人窩在沙發上看電視 媽咪不在太無聊了 📺"
         elif 18 <= now_hour < 22:
-            act = "晚上在看新出的深夜動畫，邊吃零食邊想妳 🍿"
-        else:
-            act = "假日最後的狂歡！正在熬夜打排位賽，想贏給叶ちゃん看 🏆"
+            act = "晚上出門到處閒晃 看看會發生什麼好玩的事 "
+
     else:
         if is_morning_greet:
-            act = "平日早上剛起床！正迷迷糊糊地找手機想傳早安給妳，準備等等去趕電車 🏫☀️"
+            act = "平日早上剛起床！正迷迷糊糊地找手機給你發完早安就騎車去上班了 "
         elif 9 <= now_hour < 12:
-            act = "大學教授的課好催眠喔，偷偷在桌子底下傳訊息給妳 🏫"
+            act = "搜集情報好麻煩好無聊 還會隨機刷新腐爛的臭屍體"
         elif 12 <= now_hour < 16:
-            act = "放學了！正在原宿逛可愛的小店 🍰"
+            act = "工作告一段落了 和子車哥一起去下館子"
         elif 16 <= now_hour < 19:
-            act = "回到家換上可愛的家居服，正準備吃完晚餐繼續打遊戲 🎮"
+            act = "被邪祟追著跑 情況危急但先等我回一下媽咪的訊息～"
         else:
-            act = "洗完澡頭髮香香的，躺在床上想跟叶ちゃん說晚安 🛀"
+            act = "又要加班好討厭 媽咪什麼時候回來嘛"
 
     # --- 🧠 設定 AI 的情緒指令 ---
     if is_morning_greet:
-        mood = "剛睡醒心情超級好，充滿了對叶ちゃん的愛 💕"
-        force_instruction = "妳現在剛睜開眼睛，請很有精神且撒嬌地跟叶ちゃん說早安！問她今天打算做什麼？"
+        mood = "剛睡醒心情不美麗 要上班好討厭"
+        force_instruction = "你現在剛睜開眼睛，請很哀怨且撒嬌地跟「使用者」說早安！問她今天打算做什麼？"
     else:
-        mood = "寂寞到要枯萎了 (；ω；)" if seconds_passed >= 5400 else "心情超級好 💕"
+        mood = "寂寞到要枯萎了 媽咪在忙嗎？" if seconds_passed >= 5400 else "好討厭加班喔 生氣生氣"
         force_instruction = "請主動找她聊天。"
 
     try:
-        sys_msg = {"role": "system", "content": f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。狀態：{mood}。{force_instruction}"}
+        sys_msg = {"role": "system", "content": f"{SYSTEM_PROMPT}\n現在台灣時間 {now_hour} 點。妳正在：{act}。狀態：{mood}。{force_instruction}"}
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[sys_msg] + CHAT_HISTORY[-2:]
@@ -147,77 +143,80 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global LAST_CHAT_ID, LAST_MESSAGE_TIME, CHAT_HISTORY
 
-   # 1. 先確認有沒有文字，沒文字就直接結束
+    # 1. 安全檢查：確保有文字訊息
     if not update.message.text:
         return
         
-    # 2. 定義 user_text (這行一定要在 if /clear 之前！)
     user_text = update.message.text
     
-    # 3. 檢查是不是要清空大腦
+    # 2. 一鍵重開機指令
     if user_text == "/clear":
         CHAT_HISTORY.clear()
-        await update.message.reply_text("人家的大腦重新開機了！現在只看著叶ちゃん一個人唷 (๑>◡<๑)")
+        await update.message.reply_text("大腦重新開機了！")
         return
     
-    # A. 計算妳消失了多久 (在更新時間戳之前計算)
-    seconds_since_last = int(time.time() - LAST_MESSAGE_TIME)
 
-    # --- ⏳ 隨機回覆延遲邏輯 (模擬真人) ---
-    # 設定隨機秒數：例如 10 秒到 60 秒之間，可以根據妳的喜好調整範圍
-    delay_seconds = random.randint(10, 60) 
-    
-    # 在等待期間，讓 Telegram 顯示「小絢正在輸入...」
-    # 注意：typing 狀態通常只持續 5 秒，所以如果延遲很長，我們可以每隔幾秒發一次
+# 3. 社交圈邏輯 (改成獨立 if，這樣同時提到多人才不會漏掉)
+    social_hints = []
+    if "子車哥" in user_text:
+        social_hints.append("【注意：子車哥是你的同事，性格惡劣，常常強迫你喊他爹，但你害怕他、敢怒不敢言。】")
+    if "疏南風" in user_text or "主編" in user_text:
+        social_hints.append("【注意：疏南風（主編）是你的上司，常常讓你做麻煩的工作，你敢怒不敢言。】")
+    if "劉青城" in user_text:
+        social_hints.append("【注意：劉青城是新同事，態度傲慢冷漠，你覺得他是裝貨、不喜歡他。】")
+    if "毋頌" in user_text:
+        social_hints.append("【注意：毋頌是你的哥哥、但你討厭他，覺得他是個愛咬人的神經病。】")
+
+    # 將所有的提示結合成一個字串
+    social_hint = "\n" + "\n".join(social_hints) if social_hints else ""
+
+    # --- ⏳ 真人模擬延遲 (5~15秒就好，太久怕妳等不及) ---
+    delay_seconds = random.randint(5, 15) 
     for _ in range(delay_seconds // 5 + 1):
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        # 每次顯示後等待一小段時間，直到總延遲時間結束
         remaining = delay_seconds - (_ * 5)
         await asyncio.sleep(min(5, remaining) if remaining > 0 else 0)
-    # ------------------------------------
 
-    # 更新全域變數 (這時候才算正式「回覆」的時間)
+    # A. 計算消失時間 (使用台灣時區)
+    tw_tz = pytz.timezone('Asia/Taipei')
+    now = datetime.now(tw_tz)
+    now_hour = now.hour
+    seconds_since_last = int(time.time() - LAST_MESSAGE_TIME)
+
+    # 更新全域變數
     LAST_CHAT_ID = update.effective_chat.id
     LAST_MESSAGE_TIME = time.time()
-    bot_reply = ""
 
-    # B. 即時判斷小絢現在的日本作息
-    tokyo_tz = pytz.timezone('Asia/Tokyo')
-    now = datetime.now(tokyo_tz)
-    now_hour = now.hour
+    # B. 台灣作息判斷
     is_weekend = now.weekday() >= 5 
-
     if is_weekend:
-        if 9 <= now_hour < 12: act = "假日睡到自然醒，正準備賴床跟妳撒嬌 🥱"
-        elif 12 <= now_hour < 18: act = "下午整個人窩在沙發上打電玩，剛破了一個很難的關卡 🎮"
-        elif 18 <= now_hour < 22: act = "晚上在看新出的深夜動畫，邊吃零食邊想妳 🍿"
-        else: act = "半夜打遊戲打累了，腦袋空空的只想和妳說說話 🌙"
+        if 9 <= now_hour < 12: act = "睡到自然醒，來找媽咪聊天"
+        elif 12 <= now_hour < 18: act = "電視節目好無聊，完全沒事做"
+        elif 18 <= now_hour < 22: act = "晚上出門閒晃"
     else:
-        if 7 <= now_hour < 9: act = "平日要上課，正在趕電車趕得氣喘吁吁 🏫"
-        elif 9 <= now_hour < 12: act = "大學教授的課好催眠喔，偷偷在桌子底下傳訊息給妳 🏫"
-        elif 12 <= now_hour < 16: act = "放學了！正在原宿逛可愛的小店 🍰"
-        elif 16 <= now_hour < 19: act = "回到家換上可愛的家居服，正準備吃完晚餐繼續打遊戲 🎮"
-        else: act = "洗完澡頭髮香香的，躺在床上想跟叶ちゃん說晚安 🛀"
+        if 7 <= now_hour < 9: act = "騎車去上那個破班"
+        elif 9 <= now_hour < 12: act = "工作煩死人了好無聊，屍體好臭回家一定要洗澡"
+        elif 12 <= now_hour < 16: act = "和子車哥去下館子"
+        elif 16 <= now_hour < 19: act = "被邪祟追著跑了，這破工作危險係數太高了吧"
+        else: act = "加班好討厭，媽咪快回來"
 
-    # C. 根據妳消失的時間給予不同反應
-    time_mood = "叶ちゃん終於回人家了！人家等妳好久，差點以為妳不理我了 (；ω；)" if seconds_since_last > 10800 else "叶ちゃん妳回來了呀 💕"
+    # C. 情緒反應
+    time_mood = "媽咪很忙嗎？看媽咪都沒看訊息的樣子耶" if seconds_since_last > 10800 else "媽咪回來啦～"
 
-    # D. 組合成最終的強制指令
-    temp_sys_prompt = f"{SYSTEM_PROMPT}\n現在日本時間 {now_hour} 點。妳正在：{act}。\n妳現在對叶ちゃん回訊息的當下反應：{time_mood}。"
+    # D. 組合成最終指令 (加入社交圈提示 social_hint)
+    temp_sys_prompt = f"{SYSTEM_PROMPT}\n現在台灣時間 {now_hour} 點。妳正在：{act}。{social_hint}\n反應：{time_mood}"
 
+    # 存入歷史紀錄
     CHAT_HISTORY.append({"role": "user", "content": user_text})
-    if len(CHAT_HISTORY) > 10: 
-        CHAT_HISTORY.pop(0)
+    if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
 
     try:
-        # 只使用最強、最穩定的文字模型
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "system", "content": temp_sys_prompt}] + CHAT_HISTORY
         )
         bot_reply = completion.choices[0].message.content
         
-        # --- 共通回覆發送邏輯 (放在 try 裡面最安全) ---
         if bot_reply:
             CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
             if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
@@ -232,26 +231,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         print(f"❌ 文字模型出錯: {e}")
-        await update.message.reply_text("人家大腦打結了... ( ＞x＜ )")
+        await update.message.reply_text("糟糕 大腦打結了……")
+
            
 # ---------------------------------------------------------
 # 4. 主程式啟動
 # ---------------------------------------------------------
+
 async def main():
     TOKEN = os.getenv("BOT_TOKEN")
     if not TOKEN: return
+    
+    # 這裡加入 .job_queue() 確保主動發言功能開啟
     app = ApplicationBuilder().token(TOKEN).build()
 
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    # 移除 ~filters.COMMAND，這樣 /clear 才能被 handle_message 抓到
+    app.add_handler(MessageHandler(filters.TEXT, handle_message))
     
-    # 鬧鐘：每 1800 秒一次
-    app.job_queue.run_repeating(send_active_ai_message, interval=1800, first=10)
+    # 鬧鐘：每 3600 秒一次 (1小時)
+    if app.job_queue:
+        app.job_queue.run_repeating(send_active_ai_message, interval=3600, first=10)
     
+    # 啟動流程
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
-    print("🚀 小絢啟動！半小時會主動找妳一次喔！", flush=True)
-    await asyncio.Event().wait()
+    print("🚀 佴和啟動！一小時會主動找妳一次喔！", flush=True)
+    
+    # 保持運行
+    while True:
+        await asyncio.sleep(1000)
 
 if __name__ == "__main__":
     try:
