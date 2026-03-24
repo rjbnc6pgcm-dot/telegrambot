@@ -50,7 +50,8 @@ SYSTEM_PROMPT = """
 # ---------------------------------------------------------
 async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
     global LAST_CHAT_ID, LAST_MESSAGE_TIME, CHAT_HISTORY
-    if not LAST_CHAT_ID or not client: return
+    if not LAST_CHAT_ID or not client: 
+        return
 
     # --- 🕒 時區與時間設定 (使用台灣時間) ---
     tw_tz = pytz.timezone('Asia/Taipei')
@@ -58,23 +59,18 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
     now_hour = now.hour
     is_weekend = now.weekday() >= 5 
 
-# --- 🛌 預設假日作息 (先給預設值最安全) ---
-    sleep_start = 2  # 假日 2 點睡
-    sleep_end = 12   # 預設最晚 12 點起
-   
+    # --- 🛌 預設假日作息 ---
     if is_weekend:
+        sleep_start = 2  # 假日 2 點睡
         if 9 <= now_hour < 12:
             if random.random() > 0.3: 
                 print("還在睡...")
                 return
             sleep_end = now_hour
-        else: # <--- 確保這行跟上面的 if 9 <= ... 對齊
+        else:
             sleep_end = 12
-    else: # <--- 確保這行跟最上面的 if is_weekend 對齊
-        sleep_start = 1
-        sleep_end = 7
     else:
-        # ✍️ 平日：1 點睡，7 點準時起
+        # 平日作息
         sleep_start = 1
         sleep_end = 7
 
@@ -83,11 +79,11 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
         return
 
     # --- ☀️ 判斷是不是「消失一整晚後的第一次打招呼」 ---
-    # 邏輯：消失超過 3 小時 (10800秒) 且現在是早上/中午
     seconds_passed = int(time.time() - LAST_MESSAGE_TIME)
     is_morning_greet = (now_hour == sleep_end)
 
     # --- 🎭 根據作息決定佴和在做什麼 ---
+    act = "正在發呆" # 預設值，防止變數不存在
     if is_weekend:
         if is_morning_greet:
             act = "假日終於自然醒了 想待在家廢一整天！"
@@ -95,7 +91,8 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
             act = "下午整個人窩在沙發上看電視 媽咪不在太無聊了 📺"
         elif 18 <= now_hour < 22:
             act = "晚上出門到處閒晃 看看會發生什麼好玩的事 "
-
+        else:
+            act = "假日深夜還在玩 嘿嘿"
     else:
         if is_morning_greet:
             act = "平日早上剛起床！正迷迷糊糊地找手機給你發完早安就騎車去上班了 "
@@ -123,13 +120,17 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
             messages=[sys_msg] + CHAT_HISTORY[-2:]
         )
         ai_reply = completion.choices[0].message.content
-        CHAT_HISTORY.append({"role": "assistant", "content": ai_reply})
-        if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
+        
+        if ai_reply:
+            CHAT_HISTORY.append({"role": "assistant", "content": ai_reply})
+            if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
 
-        # 這裡會把 AI 的長句子拆開來發送，模擬傳簡訊的感覺
-        for part in [p.strip() for p in re.split(r'[。！？!?\n]', ai_reply) if p.strip()]:
-            await context.bot.send_message(chat_id=LAST_CHAT_ID, text=part.replace("，", " "))
-            await asyncio.sleep(1.2)
+            # 這裡會把 AI 的長句子拆開來發送，模擬傳簡訊的感覺
+            parts = [p.strip() for p in re.split(r'[。！？!?\n]', ai_reply) if p.strip()]
+            for part in parts:
+                await context.bot.send_message(chat_id=LAST_CHAT_ID, text=part.replace("，", " "))
+                await asyncio.sleep(1.2)
+                
     except Exception as e:
         print(f"主動發言出錯: {e}")
        
