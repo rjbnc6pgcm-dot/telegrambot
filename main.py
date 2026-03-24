@@ -61,20 +61,16 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
 # --- 🛌 預設假日作息 (先給預設值最安全) ---
     sleep_start = 2  # 假日 2 點睡
     sleep_end = 12   # 預設最晚 12 點起
-
+   
     if is_weekend:
-        # 如果現在是 9~12 點之間，決定要不要提早起床
         if 9 <= now_hour < 12:
-            # 丟骰子：30% 機率現在醒 (70% 機率 return 繼續睡)
-            if random.random() > 0.3:
-                print(f"[{now}] 佴和假日還在賴床中... 💤")
+            if random.random() > 0.3: 
+                print("還在睡...")
                 return
-            else:
-                # 抽中了！把起床時間設定為「現在」，這樣後面的睡眠判斷就會過關
-                sleep_end = now_hour 
-        # 如果已經超過 12 點了，sleep_end 就維持預設的 12
-    else:
-        # 平日固定作息
+            sleep_end = now_hour
+        else: # <--- 確保這行跟上面的 if 9 <= ... 對齊
+            sleep_end = 12
+    else: # <--- 確保這行跟最上面的 if is_weekend 對齊
         sleep_start = 1
         sleep_end = 7
     else:
