@@ -1,6 +1,7 @@
 import os
 import re
 import asyncio
+import random
 import logging
 import pytz
 from datetime import datetime
@@ -43,11 +44,16 @@ SYSTEM_PROMPT = os.getenv("MY_SYSTEM_PROMPT", """
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global CHAT_HISTORY
 
-    # 1. 安全檢查：確保有文字訊息且「非機器人」發送
-    if not update.message.text or update.message.from_user.is_bot:
+    # 1. 核心檢查：不理會「自己」說的話，但要理會「其他機器人」或人類
+    if update.message.from_user.id == context.bot.id:
+        return
+
+    # 確保有文字訊息
+    if not update.message.text:
         return
         
     user_text = update.message.text
+    sender_name = update.message.from_user.first_name  # 抓取發言者顯示名稱
     
     # 2. 一鍵重開機指令
     if user_text == "/clear":
@@ -62,11 +68,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 4. 組合成最終指令 (直接將人設與時間結合)
     temp_sys_prompt = f"{SYSTEM_PROMPT}\n現在台北時間：{now_time}。"
 
-    # 存入歷史紀錄
-    CHAT_HISTORY.append({"role": "user", "content": user_text})
-    if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
+    # 5. 存入歷史紀錄 (加上名字標籤)
+    CHAT_HISTORY.append({"role": "user", "content": f"{sender_name}: {user_text}"})
+    if len(CHAT_HISTORY) > 20: CHAT_HISTORY.pop(0)
 
     try:
+        # ✨ 模擬思考延遲：隨機停頓 1 到 5 秒，避免三個機器人同時秒讀秒回
+        await asyncio.sleep(random.uniform(1, 5))
+
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "system", "content": temp_sys_prompt}] + CHAT_HISTORY
@@ -74,21 +83,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot_reply = completion.choices[0].message.content
         
         if bot_reply:
+            # 紀錄 AI 的回覆
             CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
-            if len(CHAT_HISTORY) > 10: CHAT_HISTORY.pop(0)
+            if len(CHAT_HISTORY) > 20: CHAT_HISTORY.pop(0)
             
-            # 將 AI 的回覆根據標點符號拆開，模擬簡訊斷行
+            # 將 AI 的回覆拆開，模擬簡訊斷行
             processed_text = bot_reply.replace("，", " ").replace(",", " ")
             raw_messages = [msg.strip() for msg in re.split(r'(?<=[。！？!?\n～])', processed_text) if msg.strip()]
             
             for msg in raw_messages:
-                # 訊息間短暫停頓，增加真實感
-                await asyncio.sleep(0.6)
+                # ✨ 訊息間隨機停頓 0.8 到 2 秒，更有打字感
+                await asyncio.sleep(random.uniform(0.8, 2.0))
                 await update.message.reply_text(msg)
 
     except Exception as e:
         print(f"❌ 錯誤: {e}")
-        await update.message.reply_text("糟糕 大腦打結了……")
+        # 避免在群組裡頻繁噴錯，如果是 rate limit 錯誤就不回覆
+        if "rate_limit" not in str(e).lower():
+            await update.message.reply_text("糟糕 大腦打結了……")
 
 # ---------------------------------------------------------
 # 3. 主程式啟動
