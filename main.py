@@ -140,6 +140,10 @@ async def send_active_ai_message(context: ContextTypes.DEFAULT_TYPE):
 # 3. 處理使用者訊息 (真人模擬模擬版)
 # ---------------------------------------------------------
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # 如果訊息是機器人發出的，直接無視，避免 AI 互相對話導致額度耗盡
+    if update.message.from_user.is_bot:
+        return
+       
     global LAST_CHAT_ID, LAST_MESSAGE_TIME, CHAT_HISTORY
 
     # 1. 安全檢查：確保有文字訊息
