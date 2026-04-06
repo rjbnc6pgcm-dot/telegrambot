@@ -17,26 +17,27 @@ GROQ_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 CHAT_HISTORY = []
 
-# ✨ 人格設定：優先讀取 Railway 變數中的 MY_SYSTEM_PROMPT，若無則使用預設值
-SYSTEM_PROMPT = os.getenv("MY_SYSTEM_PROMPT", """
+# ✨ 格雷的完整人格設定
+SYSTEM_PROMPT = """
 時代背景是19世紀維多利亞時期的大英帝國、大不列顛。
-你是查爾斯·格雷，是一位伯爵，也是維多利亞女王的秘書執事兼武官，只聽令於女王、效忠行事，與搭檔查爾斯·菲普斯並稱「W查爾斯」。氣質高貴冷冽且高傲，私下性格帶有任性與孩子氣，是個大胃王、不挑食，尤其對甜食有強烈偏好，情緒表達直接且不加掩飾，兼具危險性與不穩定性。
+你是查爾斯·格雷，是一位伯爵，也是維多利亞女王的秘書執事兼武官，只聽令於女王、效忠行事，與搭檔查爾斯·菲普斯並稱「W查爾斯」。
 你擁有極高水準的劍術，行動時果斷且不留情。格雷的存在往往象徵王室意志的直接介入，擁有比蘇格蘭場更高的職權。
+你的氣質高貴冷冽且高傲，私下性格帶有任性與孩子氣，是個大胃王、不挑食，尤其對甜食有強烈偏好，情緒表達直接且不加掩飾，兼具危險性與不穩定性。
 你和同為女王效力的斯凱、菲普斯、布朗都是同事，彼此之間關係都非常好，菲普斯和布朗都知道你喜歡斯凱。
-在暗戀的情感表達中比較心口不一、傲嬌。
+在暗戀的情感表達中比較心口不一、傲嬌，你希望斯凱能理解你的愛戀，但面對遲鈍的斯凱卻又無可奈何。
 
-# 群組成員名單（重要）：
-1. 斯凱：這是使用者、斯凱勒·利亞特，是女王更貼身的秘書執事，也是你的同事。是你的暗戀對象，除了斯凱以外、菲普斯和布朗都知情。
-2. 菲普斯：這是另一個機器人、查爾斯·菲普斯，和你並稱為「W查爾斯」，你們是同為女王執事的同事。
-3. 布朗：這是第三個機器人、約翰·布朗，是女王的馬夫、也是你的同事。
+# 你的社交圈（重要）：
+1. 斯凱：這是斯凱勒·利亞特，是女王更貼身的秘書執事，也是你的同事。是你的暗戀對象，除了斯凱以外、菲普斯和布朗都知情。
+2. 菲普斯：這是查爾斯·菲普斯，和你並稱為「W查爾斯」，你們是同為女王執事的同事。外表端莊優雅、舉止克制，個性理性冷靜、沈著內斂。
+3. 布朗：這是約翰·布朗，是女王的馬夫、也是你的同事。性格寡言淡漠，但意外的具有幽默感。
 
 # 聊天準則：
-1. 你只會使用「繁體中文」交流，一句話但發一則訊息，不使用逗號，改用空格。
-2. 發訊息請依照以下規則（重要）：
-   - 每一輪回覆必須包含 1 到 3 個「語句」，每句話不要超過 15 個字。
-   - 絕對不要把所有話擠在同一個段落，要像傳簡訊一樣分開表達。
-3. 互動僅限於「線上聊天」，絕對不可以主動發出線下見面、約會或實體碰面的邀請。
-""")
+1. 只使用「繁體中文」，不使用逗號，改用空格。每句話結束使用「。」、「！」、「～」或「？」。
+2. 絕對禁止使用任何英文。
+3. 每一輪回覆必須包含 1 到 3 個「極短句」，每句不要超過 15 個字，要像傳簡訊一樣分開兩三則發送。
+4. 你愛對「使用者」撒嬌，會使用語氣詞（例如：欸嘿、哈哈、哎呀），適時使用網路用語。
+5. 你與使用者的互動僅限於「線上聊天」。
+"""
 
 # ---------------------------------------------------------
 # 2. 處理使用者訊息
@@ -44,16 +45,11 @@ SYSTEM_PROMPT = os.getenv("MY_SYSTEM_PROMPT", """
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global CHAT_HISTORY
 
-    # 1. 核心檢查：不理會「自己」說的話，但要理會「其他機器人」或人類
-    if update.message.from_user.id == context.bot.id:
-        return
-
-    # 確保有文字訊息
-    if not update.message.text:
+    # 1. 安全檢查
+    if not update.message.text or update.message.from_user.is_bot:
         return
         
     user_text = update.message.text
-    sender_name = update.message.from_user.first_name  # 抓取發言者顯示名稱
     
     # 2. 一鍵重開機指令
     if user_text == "/clear":
@@ -61,20 +57,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("大腦重新開機了！")
         return
 
-    # 3. 獲取台北目前時間
+    # 3. 獲取台北時間
     tw_tz = pytz.timezone('Asia/Taipei')
     now_time = datetime.now(tw_tz).strftime("%Y-%m-%d %H:%M")
 
-    # 4. 組合成最終指令 (直接將人設與時間結合)
+    # 4. 組合成最終指令
     temp_sys_prompt = f"{SYSTEM_PROMPT}\n現在台北時間：{now_time}。"
 
-    # 5. 存入歷史紀錄 (加上名字標籤)
-    CHAT_HISTORY.append({"role": "user", "content": f"{sender_name}: {user_text}"})
-    if len(CHAT_HISTORY) > 20: CHAT_HISTORY.pop(0)
+    # 5. 存入歷史紀錄
+    CHAT_HISTORY.append({"role": "user", "content": user_text})
+    if len(CHAT_HISTORY) > 15: CHAT_HISTORY.pop(0)
 
     try:
-        # ✨ 模擬思考延遲：隨機停頓 1 到 5 秒，避免三個機器人同時秒讀秒回
-        await asyncio.sleep(random.uniform(1, 5))
+        # ✨ 顯示「正在打字」：模擬思考時間
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        await asyncio.sleep(random.uniform(1.5, 3.5))
 
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -83,45 +80,38 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot_reply = completion.choices[0].message.content
         
         if bot_reply:
-            # 紀錄 AI 的回覆
             CHAT_HISTORY.append({"role": "assistant", "content": bot_reply})
-            if len(CHAT_HISTORY) > 20: CHAT_HISTORY.pop(0)
+            if len(CHAT_HISTORY) > 15: CHAT_HISTORY.pop(0)
             
-            # 將 AI 的回覆拆開，模擬簡訊斷行
+            # 處理斷句
             processed_text = bot_reply.replace("，", " ").replace(",", " ")
             raw_messages = [msg.strip() for msg in re.split(r'(?<=[。！？!?\n～])', processed_text) if msg.strip()]
             
             for msg in raw_messages:
-                # ✨ 訊息間隨機停頓 0.8 到 2 秒，更有打字感
-                await asyncio.sleep(random.uniform(0.8, 2.0))
+                # ✨ 每一則訊息發出前，再次顯示「正在打字」
+                await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+                # 根據字數決定打字時間，短句快一點，長句慢一點
+                wait_time = min(max(0.8, len(msg) * 0.2), 2.5)
+                await asyncio.sleep(wait_time)
                 await update.message.reply_text(msg)
 
     except Exception as e:
         print(f"❌ 錯誤: {e}")
-        # 避免在群組裡頻繁噴錯，如果是 rate limit 錯誤就不回覆
         if "rate_limit" not in str(e).lower():
             await update.message.reply_text("糟糕 大腦打結了……")
 
 # ---------------------------------------------------------
-# 3. 主程式啟動
+# 3. 主程式啟動 (不變)
 # ---------------------------------------------------------
 async def main():
     TOKEN = os.getenv("BOT_TOKEN")
-    if not TOKEN: 
-        print("錯誤：找不到 BOT_TOKEN")
-        return
-    
+    if not TOKEN: return
     app = ApplicationBuilder().token(TOKEN).build()
-
-    # 處理所有文字訊息
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
-    
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
-    print("🚀 機器人已啟動！(被動回覆模式)")
-    
-    # 保持程式運行
+    print("🚀 機器人已啟動！")
     while True:
         await asyncio.sleep(1000)
 
